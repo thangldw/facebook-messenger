@@ -85,6 +85,10 @@ let updater = null;
 let settingsWin = null;
 let isQuitting = false;
 const configuredPartitions = new Set();
+// Call windows and other popups opened by Facebook pages. They are separate
+// windows, so the app lock hides them explicitly (see applyVisibility).
+const popups = new Set();
+const hiddenByLock = new Set();
 
 // ---------------------------------------------------------------- helpers
 
@@ -245,6 +249,8 @@ function guardContents(wc) {
   });
 
   wc.setWindowOpenHandler(({ url }) => {
+    // A locked app opens nothing: a new window would show above the lock screen.
+    if (lock && lock.locked) return { action: 'deny' };
     // Attachments and "Download" buttons: save the file, never render it.
     const file = downloadTarget(url);
     if (file) { wc.downloadURL(file); return { action: 'deny' }; }
@@ -253,6 +259,8 @@ function guardContents(wc) {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
+          // Shown by did-create-window below, once its opener has been checked.
+          show: false,
           autoHideMenuBar: true,
           webPreferences: { session: wc.session, contextIsolation: true, sandbox: true, nodeIntegration: false },
         },
@@ -261,6 +269,25 @@ function guardContents(wc) {
     openExternal(url);
     return { action: 'deny' };
   });
+
+  wc.on('did-create-window', (win) => {
+    // A popup starts as about:blank, which the guards above let through, and
+    // its opener can document.write anything into it. Only Facebook's own
+    // frames may hold that handle; a window opened by an embedded third-party
+    // or sandboxed iframe could otherwise show a fake login page with no
+    // address bar. (No opener means "noopener": nothing can script the window.)
+    const { opener } = win.webContents;
+    if (opener && !isFacebookUrl(opener.origin)) { win.destroy(); return; }
+    trackPopup(win);
+  });
+}
+
+function trackPopup(win) {
+  popups.add(win);
+  win.on('closed', () => { popups.delete(win); hiddenByLock.delete(win); });
+  // Whatever tries to bring it back while locked (page script, Window menu).
+  win.on('show', () => { if (lock && lock.locked) { hiddenByLock.add(win); win.hide(); } });
+  if (lock && lock.locked) hiddenByLock.add(win); else win.show();
 }
 
 function attachAccountBehaviour(acc) {
@@ -346,9 +373,18 @@ function addAccountView({ id, name }) {
 
 // Only the active account is shown, and none while locked: the views are
 // hidden before the lock screen has even loaded, so nothing shows through.
+// Popups (call windows) are hidden while locked and come back on unlock.
 function applyVisibility() {
   const locked = Boolean(lock && lock.locked);
   for (const acc of accounts.values()) acc.view.setVisible(!locked && acc.id === activeId);
+  if (locked) {
+    for (const win of popups) {
+      if (!win.isDestroyed() && win.isVisible()) { hiddenByLock.add(win); win.hide(); }
+    }
+  } else {
+    for (const win of hiddenByLock) if (!win.isDestroyed()) win.show();
+    hiddenByLock.clear();
+  }
 }
 
 function switchAccount(id) {

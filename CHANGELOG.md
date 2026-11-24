@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Security: the app lock now also hides call windows and other popups, and no new window opens while locked. Before, a call window stayed visible and usable above the lock.
+- Security: a popup opened by a non-Facebook frame embedded in a page (which could write a fake login page into a window with no address bar) is closed before it is shown.
+- Release builds no longer fetch `@electron/fuses` from npm while building the shipped files; it is pinned in `package-lock.json`.
+
 ## 0.4.0
 
 - **Updates itself.** *Check for Updates…* → **Update now** downloads the release for your system from GitHub, verifies it against the release's SHA-256 checksums, and installs it on restart, keeping the old version until the new one is in place. *Later* installs it the next time you quit. Works for the macOS app, the Windows zip and setup installs, and the Linux AppImage; Homebrew and `.deb` installs keep using their package manager.

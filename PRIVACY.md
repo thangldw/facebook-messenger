@@ -38,7 +38,7 @@ Your login happens inside Facebook's web page. The app is deliberately built so 
 3. **The app does not touch cookies or traffic.** It never reads the cookie store and does not inspect, intercept or proxy network requests.
 4. **The binary is hardened.** Builds enable the Electron fuses that encrypt cookies at rest and disable `ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS` and `--inspect`, the usual ways to turn an Electron app into a tool for reading its data. The app only loads its own code from its integrity-checked `app.asar`.
 5. **Minimal permissions, Facebook only.** Facebook's own pages may use notifications, microphone/camera (calls), screen capture (screen sharing, after you pick a screen), clipboard write and fullscreen. Third-party content embedded in a page gets none of these, and everything else (location, USB, Bluetooth, …) is denied for everyone.
-6. **No fake login windows.** App windows have no address bar, so nothing but Facebook may ever render in one. Every window, including call windows and popups, refuses `data:`, `blob:` and `file:` pages and any non-Facebook site, whether reached by a link, a script, a popup or a server redirect; those links open in your normal browser, where you can see the address. Only `http`/`https` links are handed to the browser, so a page cannot launch other programs on your computer.
+6. **No fake login windows.** App windows have no address bar, so nothing but Facebook may ever render in one. Every window, including call windows and popups, refuses `data:`, `blob:` and `file:` pages and any non-Facebook site, whether reached by a link, a script, a popup or a server redirect, and a popup opened by a non-Facebook frame embedded in a page is closed before it is shown; those links open in your normal browser, where you can see the address. Only `http`/`https` links are handed to the browser, so a page cannot launch other programs on your computer.
 
 These rules are enforced by automated tests in [`test/privacy.test.js`](test/privacy.test.js), which run on every push. If anyone adds code that runs scripts in the page, reads cookies, makes its own network requests, uploads crash reports or weakens the isolation settings, the tests fail.
 
@@ -104,7 +104,7 @@ Use a network monitor such as Little Snitch or LuLu (macOS), or Resource Monitor
 
 ## About the app lock
 
-The lock hides the app's window behind the lock screen, withholds notifications (whose previews would show message text) and disables DevTools until you unlock. It is a privacy screen for a shared or unattended computer, not encryption: Facebook's session stays on disk as described above, so someone with full access to your user account and enough skill could still extract it. Use your operating system's account password and full-disk encryption for that threat.
+The lock hides the app's window behind the lock screen (call windows and other popups are hidden too, and none can open while locked), withholds notifications (whose previews would show message text) and disables DevTools until you unlock. It is a privacy screen for a shared or unattended computer, not encryption: Facebook's session stays on disk as described above, so someone with full access to your user account and enough skill could still extract it. Use your operating system's account password and full-disk encryption for that threat.
 
 ## What this app cannot protect against
 

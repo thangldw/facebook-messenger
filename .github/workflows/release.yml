@@ -68,7 +68,8 @@ jobs:
           THRUM_ZIP="$zip" THRUM_DIR="$RUNNER_TEMP/apps" THRUM_NO_OPEN=1 ./install.sh
           app="$RUNNER_TEMP/apps/Thrum.app"
           codesign --verify --deep --strict "$app"
-          npx --yes @electron/fuses read --app "$app" | tee fuses.txt
+          # Pinned in package-lock.json: nothing is fetched from npm in a job that builds shipped files.
+          npx --no-install @electron/fuses read --app "$app" | tee fuses.txt
           grep -q "EnableCookieEncryption is Enabled" fuses.txt
           grep -q "RunAsNode is Disabled" fuses.txt
 
