@@ -1,173 +1,118 @@
 # Thrum
 
-A quiet desktop app for your Facebook messages on macOS, Windows and Linux: chat without opening Facebook in a browser, and without the feed.
+A quiet desktop app for Facebook Messenger on macOS, Windows and Linux. Chat without opening Facebook in a browser, and without the feed.
 
-*Formerly Messenger Lite.* The app was renamed in v0.3.0 so it is not confused with Meta's own products. Updating with the install command or Homebrew replaces the old app and keeps your settings and accounts; on macOS you sign in to Facebook once more, because the cookie key in the Keychain was stored under the old name.
-
-It wraps Facebook's own web client at `facebook.com/messages` (messenger.com was shut down in April 2026 and now redirects there). There is no reverse-engineered protocol and no unofficial API, so it behaves exactly like Messenger in a browser, minus the rest of Facebook.
+Thrum runs Facebook's own web client (`facebook.com/messages`) in a dedicated window. There is no reverse-engineered protocol and no unofficial API: it behaves like Messenger in a browser tab, minus the rest of Facebook.
 
 > Thrum is an independent project, not affiliated with or endorsed by Meta. "Facebook" and "Messenger" are trademarks of Meta Platforms, Inc., used here only to describe what the app works with.
 
 ## Features
 
-- **Messages only.** The News Feed, Watch, Reels, Marketplace and similar routes bounce back to your inbox. Profiles, posts and outbound links open in your default browser.
-- **Photos and files** open in the app's photo viewer; attachments download to a folder you choose (Downloads by default).
-- **Voice and video calls**, including the call window, which stays in-app so it shares your login.
-- **Screen sharing** in calls: the native picker on macOS 15+, and a source chooser on Windows, Linux and older macOS. On Windows it can also share system audio.
-- **Native notifications** and an unread count: menu bar/tray icon, dock badge (macOS), taskbar badge (Windows), window title.
-- **Runs in the background.** Closing the window keeps it in the menu bar (macOS) or system tray (Windows, Linux) so you still get notifications. Optional **Open at login**.
-- **Multiple accounts**, each with its own separate login. All of them keep running, so you get notifications and unread counts for every account; switch from the *Accounts* menu, the tray, or `Cmd/Ctrl + 1…9`. With one account the app runs a single Facebook page; each extra account adds roughly 200–500 MB of memory depending on how much it has loaded.
-- **Pause notifications** for an hour, until tomorrow morning, or until you resume (*Notifications* menu or tray), or on a weekly **focus schedule** (e.g. weekdays 9:00–18:00, or 22:00–07:00 overnight).
-- **Global shortcut** to show or hide the app from anywhere: `⌃⌥M` on macOS, `Ctrl+Alt+Shift+M` on Windows/Linux.
-- **App lock** with a password (and Touch ID on macOS). Locks on launch, when the computer locks or sleeps, and after 1–60 minutes of inactivity. Notification previews are withheld while locked.
-- **Privacy screen**: blur the app whenever it is not the active window (useful when screen sharing or in public).
-- **Private mode**: nothing is written to disk; you are logged out whenever you quit.
-- **Reopens your last conversation** on launch (only its address is remembered).
-- **Updates itself** (since v0.4.0): *Check for Updates…* in the app menu (or turn on automatic checks in *Settings*), then **Update now**. Thrum downloads the new version from this project's GitHub releases, checks its SHA-256 checksum, and swaps it in when it restarts, keeping the old version until the new one is in place. Your logins and settings stay. Copies installed with Homebrew or the `.deb` are updated with `brew upgrade` / `apt` instead.
-- **Recovers by itself**: reconnects when the network comes back, and reloads after a crash or hang.
-- **Hide Facebook top bar**, persistent isolated login, remembered window size, single instance, spellcheck (macOS).
-- `Ctrl/Cmd + Shift + M` returns to the inbox; `Ctrl/Cmd + Shift + L` locks the app.
+**Messaging**
+- Messages only: the News Feed, Watch, Reels and Marketplace bounce back to your inbox; profiles, posts and links open in your browser.
+- Voice and video calls, with screen sharing (the native picker on macOS 15+, a source chooser elsewhere; system audio on Windows).
+- Photos open in the app's viewer; attachments download to a folder you choose.
+- Several accounts, each with its own login, all running at once. Switch with `Cmd/Ctrl + 1…9`, the *Accounts* menu or the tray.
+- Reopens your last conversation on launch.
 
-Toggles are under the **Settings** menu; accounts and the focus schedule are edited in the settings window (`Cmd/Ctrl + ,`).
+**Staying in touch, on your terms**
+- Native notifications and an unread count on the menu bar/tray icon, the dock (macOS) and the taskbar (Windows).
+- Keeps running in the background when you close the window; optional *Open at login*.
+- Pause notifications for an hour, until tomorrow morning, until you resume, or on a weekly focus schedule.
+- Global shortcut to show or hide Thrum: `⌃⌥M` on macOS, `Ctrl+Alt+Shift+M` on Windows and Linux.
 
-## Privacy
+**Privacy**
+- App lock with a password (and Touch ID on macOS): on launch, when the computer locks or sleeps, or after a period of inactivity.
+- Privacy screen: blurs the window whenever it is not in front.
+- Private mode: nothing is written to disk; you are logged out when you quit.
 
-**The app never sees, stores or sends your Facebook username or password.** You sign in on Facebook's own page, which sends them straight to Facebook. The app keeps only an encrypted session cookie on your computer and sends nothing anywhere itself, except an optional, off-by-default check for new versions. [PRIVACY.md](PRIVACY.md) explains why, and how to verify every claim yourself.
+**Maintenance-free**
+- Updates itself: *Check for Updates…*, then **Update now**. The download is checked against the release's SHA-256 checksums and swapped in on restart.
+- Reconnects after network drops and reloads after a crash or hang.
+
+Settings live in the **Settings** menu; accounts and the focus schedule are edited in the settings window (`Cmd/Ctrl + ,`).
+
+## Privacy in one paragraph
+
+Thrum never sees, stores or sends your Facebook username or password: you sign in on Facebook's own page, which talks straight to Facebook. The app keeps only what a browser keeps to stay signed in (a session cookie, encrypted with your OS keychain) and sends nothing anywhere itself, apart from an update check that is off by default. [PRIVACY.md](PRIVACY.md) explains how this is enforced and how to verify it yourself.
 
 ## Install
 
-Ready-to-run builds, nothing to compile. The one-line installers download the latest release, check its SHA-256 checksum, and install it without the "unidentified developer" (macOS) or SmartScreen (Windows) block. Run the same command again to update; your login is kept.
+The one-line installers download the latest release, verify its SHA-256 checksum and install it without the "unidentified developer" (macOS) or SmartScreen (Windows) warnings. No admin rights are needed.
 
-**macOS** (Apple Silicon and Intel), in Terminal:
+**macOS** (Apple Silicon and Intel), in Terminal. Installs to `~/Applications/Thrum.app`:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/thangldw/thrum/main/install.sh | bash
 ```
 
-Installs to `~/Applications/Thrum.app`.
-
-Or with **Homebrew**:
+Or with Homebrew:
 
 ```bash
 brew tap thangldw/thrum https://github.com/thangldw/thrum
 brew install --cask thangldw/thrum/thrum
-# update later: brew upgrade --cask thangldw/thrum/thrum
 ```
 
-**Windows 10/11** (x64 and ARM), in PowerShell (no admin needed, no installer `.exe`):
+**Windows 10/11** (x64 and ARM), in PowerShell. Installs to `%LOCALAPPDATA%\Programs\Thrum` with a Start menu shortcut:
 
 ```powershell
 irm https://raw.githubusercontent.com/thangldw/thrum/main/install.ps1 | iex
 ```
 
-Installs to `%LOCALAPPDATA%\Programs\Thrum` and adds a Start menu shortcut. Once the package is accepted into the winget repository you can also use `winget install ThangLDW.Thrum`.
+**Linux** (x64): download the `.deb` from the [latest release](https://github.com/thangldw/thrum/releases/latest) and run `sudo apt install ./Thrum-<version>-linux-amd64.deb`, or use the AppImage on other distributions.
 
-**Linux** (Debian/Ubuntu), download the `.deb` from the [latest release](https://github.com/thangldw/thrum/releases/latest) and run `sudo apt install ./Thrum-<ver>-linux-amd64.deb`; other distributions can use the AppImage.
-
-The scripts are short; read [install.sh](install.sh) / [install.ps1](install.ps1) before running them if you like.
+Both scripts are short; read [install.sh](install.sh) and [install.ps1](install.ps1) first if you like.
 
 ### Manual download
 
-Or download a file from the [latest release](https://github.com/thangldw/thrum/releases/latest):
+Every [release](https://github.com/thangldw/thrum/releases/latest) has:
 
 | System | File |
 |---|---|
-| macOS (Apple Silicon) | `Thrum-<ver>-mac-arm64.dmg` or `.zip` |
-| macOS (Intel) | `Thrum-<ver>-mac-x64.dmg` or `.zip` |
-| Windows (x64 / ARM) | `Thrum-<ver>-win-x64.zip` / `-win-arm64.zip` (unzip, run `Thrum.exe`) or `Thrum-<ver>-win-x64-setup.exe` / `-win-arm64-setup.exe` (installer) |
-| Linux | `Thrum-<ver>-linux-amd64.deb` or `Thrum-<ver>-linux-x86_64.AppImage` (`chmod +x`, then run) |
+| macOS | `Thrum-<version>-mac-arm64` (Apple Silicon) or `-mac-x64` (Intel), as `.dmg` or `.zip` |
+| Windows | `Thrum-<version>-win-x64` or `-win-arm64`, as `.zip` (unzip and run `Thrum.exe`) or `-setup.exe` |
+| Linux | `Thrum-<version>-linux-amd64.deb` or `Thrum-<version>-linux-x86_64.AppImage` |
 
-Files downloaded with a browser are flagged by the OS because the builds are not signed with a paid certificate:
+Builds are not signed with paid Apple or Microsoft certificates, so files downloaded with a browser are flagged:
 
-- **macOS 15 and later:** open the app once (it is blocked), then go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. Alternatively run `xattr -dr com.apple.quarantine "/Applications/Thrum.app"`.
-- **Windows SmartScreen:** click **More info → Run anyway**. For the zip, right-click it → Properties → **Unblock** before extracting.
+- **macOS:** open the app once, then **System Settings → Privacy & Security → Open Anyway**.
+- **Windows:** in SmartScreen click **More info → Run anyway**; for the zip, right-click → Properties → **Unblock** before extracting.
 
-`SHA256SUMS.txt` in each release lists the checksums, and every file has a GitHub build attestation; see [PRIVACY.md](PRIVACY.md#1-the-download-is-built-from-this-source-code) for how to verify them.
+Each release also has `SHA256SUMS.txt` and a GitHub build attestation for every file; [PRIVACY.md](PRIVACY.md#1-the-download-is-built-from-this-source-code) shows how to check them.
 
 ### First launch
 
-Sign in to Facebook in the app window. If you use end-to-end encrypted chats, Messenger may ask for your PIN to restore your history, the same as in a browser. On macOS, allow the Keychain prompt for "Thrum Safe Storage" (used to encrypt the session cookie) with **Always Allow**.
+Sign in to Facebook in the window. If you use end-to-end encrypted chats, Messenger may ask for your PIN to restore your history, as in a browser. On macOS, answer the Keychain prompt for "Thrum Safe Storage" (the key that encrypts your session cookie) with **Always Allow**.
+
+For calls, macOS asks for microphone and camera access the first time. Screen sharing also needs **System Settings → Privacy & Security → Screen & System Audio Recording** turned on for Thrum; restart Thrum afterwards.
+
+### Updating
+
+Use **Check for Updates…** (in the *Thrum* menu on macOS, the *File* menu elsewhere), or turn on *Settings → Check for updates automatically* to be told about new versions. **Update now** downloads the release for your system from GitHub, checks its checksum and installs it when Thrum restarts, keeping your logins and settings. Nothing is downloaded or installed until you click it.
+
+Homebrew installs update with `brew upgrade --cask thangldw/thrum/thrum`, and `.deb` installs with a newer `.deb`. Re-running the install command also works.
 
 ### Uninstall
 
-Quit the app, then delete:
+Quit Thrum, then delete:
 
-- **macOS:** `~/Applications/Thrum.app` and `~/Library/Application Support/Thrum` (Homebrew: `brew uninstall --zap --cask thangldw/thrum/thrum`)
-- **Windows:** `%LOCALAPPDATA%\Programs\Thrum`, `%APPDATA%\Thrum` and the Start menu shortcut (or use *Apps & features* if you used the setup `.exe`)
-- **Linux:** `sudo apt remove thrum` and `~/.config/Thrum`
-
-### Calls on macOS
-
-macOS asks for microphone and camera access the first time you join a call. Screen sharing additionally needs **System Settings → Privacy & Security → Screen & System Audio Recording** enabled for Thrum; restart the app after granting it.
-
-## Build from source
-
-Requires Node.js 22 or newer.
-
-```bash
-npm install
-npm start          # run from source
-npm test           # route policy and privacy tests
-npm run dist:mac   # or dist:win / dist:linux, output in dist/ (Windows: add --x64 or --arm64)
-npm run app:mac    # macOS: just the .app, fastest for local use
-```
-
-Build each platform on that platform. Cross-building macOS from another OS is not supported, and the Windows installer needs Wine when built from Linux or macOS.
-
-## Releasing
-
-Releases are built on native GitHub runners by `.github/workflows/release.yml`:
-
-```bash
-npm version patch          # bumps package.json and creates tag vX.Y.Z
-git push --follow-tags     # CI builds mac/win/linux and publishes the release
-```
-
-The workflow fails if the tag does not match the `version` in `package.json`. It smoke-tests the installers on each OS, publishes the release with `SHA256SUMS.txt` and build attestations, updates the Homebrew cask in `Casks/`, then installs from the published release every supported way (install.sh, Homebrew, install.ps1 on x64 and on a Windows ARM runner, apt) to confirm they work. Running it manually from the Actions tab builds and smoke-tests the installers as workflow artifacts without publishing.
-
-**winget:** each release includes `Thrum-<ver>-winget-manifests.zip`. The first submission to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) is manual (`wingetcreate submit <manifest folder>`); after it is accepted, add a repository secret `WINGET_TOKEN` (a GitHub token with `public_repo` scope) and every later release is submitted automatically.
-
-## How it works
-
-| File | Purpose |
-|---|---|
-| `src/main.js` | Window, sessions, permissions, accounts, menus, wiring |
-| `src/account-view.js` | One Facebook account: a view with its own session |
-| `src/routes.js` | Route policy: which URLs stay in-app, bounce to the inbox, download, or open externally |
-| `src/settings.js` | Settings, validated against a schema on every read |
-| `src/tray.js`, `src/dnd.js`, `src/focus.js` | Menu bar/tray icon, pause notifications, focus schedule |
-| `src/lock.js`, `src/password.js` | App lock: scrypt password hash, Touch ID, auto-lock |
-| `src/overlay.js`, `src/settings-window.js`, `src/ui/` | The app's own pages: lock/recovery screen, settings window |
-| `src/recovery.js` | Reconnect after network failures, reload after crashes/hangs |
-| `src/updater.js` | Opt-in update check and verified release downloads (GitHub only) |
-| `src/self-update.js` | Installs a downloaded update: install detection, unpack and check, swap helper |
-| `src/screen-share.js` | Screen-share source picker for `getDisplayMedia()` |
-| `test/` | Route, module and privacy tests; `privacy.test.js` enforces [PRIVACY.md](PRIVACY.md) |
-| `install.sh`, `install.ps1`, `Casks/`, `scripts/packaging.js` | Installers and package-manager files |
-
-Security issues: see [SECURITY.md](SECURITY.md).
-
-The page runs with `contextIsolation`, `sandbox` and no Node integration; the app injects only CSS. Permissions are limited to notifications, microphone/camera, screen capture, clipboard write and fullscreen. Builds enable cookie encryption and disable Electron's Node/inspector entry points via fuses. The user agent drops the `Electron` token so Facebook serves its normal web client.
-
-### Adjusting the route policy
-
-All rules live in `src/routes.js`:
-
-- `ALLOWED_PREFIXES`: paths that stay in-app (messaging, calls, login, checkpoint, 2FA, recovery).
-- `FEED_PATHS` / `FEED_PREFIXES`: paths that bounce back to the inbox.
-- Anything else on facebook.com opens in your browser.
-
-If a login, security or call step ever gets sent to your browser, add its path prefix to `ALLOWED_PREFIXES` and run `npm test`.
+- **macOS:** `~/Applications/Thrum.app` and `~/Library/Application Support/Thrum` (Homebrew: `brew uninstall --zap --cask thangldw/thrum/thrum`).
+- **Windows:** `%LOCALAPPDATA%\Programs\Thrum`, `%APPDATA%\Thrum` and the Start menu shortcut, or use *Apps & features* if you installed with `setup.exe`.
+- **Linux:** `sudo apt remove thrum` and `~/.config/Thrum`.
 
 ## Known limitations
 
-- Depends on Facebook's web client: if Meta changes it, the top-bar hiding (`div[role="banner"]`) or a route may need updating.
-- **A Facebook account is required.** Since messenger.com closed, Meta only offers Messenger on desktop through facebook.com, so this app cannot be used with a deactivated Facebook account without reactivating it (signing in to facebook.com reactivates a deactivated account), nor with a Messenger-only account. Meta's mobile Messenger app is the only option for those.
+- **A Facebook account is required.** Meta offers Messenger on the desktop only through facebook.com (messenger.com closed in April 2026), so Thrum cannot be used with a Messenger-only account, or with a deactivated Facebook account without reactivating it.
+- **The unread count is Facebook's.** Thrum reads the number Facebook puts in the page title, which can include Facebook notifications as well as unread chats.
+- **Notifications do not name the account** when you have several, because Thrum does not read Facebook's pages. The tray and *Accounts* menu show unread counts per account.
 - On Windows and Linux, clicking a notification may not bring a hidden window to the front; use the tray icon or the global shortcut.
-- With several accounts, notifications do not say which account they belong to, and clicking one does not switch accounts: the app does not read Facebook's pages, so it cannot see the account name. The tray and *Accounts* menu show unread counts per account.
-- Spellcheck is macOS-only: on Windows and Linux Electron would download dictionaries from Google, so it is off to keep traffic Facebook-only.
-- Updates never install without you: the automatic check (off by default) only tells you, and you choose **Update now**. Homebrew and `.deb` installs update through their package manager. On macOS, the Keychain may ask again for "Thrum Safe Storage" after an update (choose **Always Allow**), because builds are not signed with a paid certificate.
-- Builds are not signed with paid Apple/Microsoft certificates; the install scripts avoid the resulting warnings, browser downloads do not.
+- Spellcheck is macOS-only: on Windows and Linux, Electron would download dictionaries from Google.
+- After an update on macOS, the Keychain may ask again for "Thrum Safe Storage" (choose **Always Allow**), because builds are not signed with a paid certificate.
+- If Meta changes its web client, hiding the top bar or a navigation rule may need an update.
+
+## Contributing
+
+Building from source, tests, the release process and how the code is organised are in [CONTRIBUTING.md](CONTRIBUTING.md). Changes per version are in [CHANGELOG.md](CHANGELOG.md). Report security issues privately as described in [SECURITY.md](SECURITY.md).
 
 ## License
 

@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Only the latest release is supported. Each release ships the Electron (Chromium) version current at the time; update by re-running the install command from the [README](README.md#install).
+Only the latest release is supported. Each release ships the Electron (Chromium) version current at the time. Update with **Check for Updates… → Update now** in the app, or as described in the [README](README.md#updating).
 
 ## Reporting a vulnerability
 
@@ -12,8 +12,8 @@ Useful to include: affected version and OS, steps to reproduce, and the impact y
 
 ## Scope
 
-In scope: this app's code (`src/`), the install scripts, and the release workflow, for example a way to show non-Facebook content in an app window, to read the session or page content from outside the page, to bypass a permission or the route policy, or to tamper with a release.
+In scope: this app's code (`src/`), the install scripts, and the release workflow, for example a way to show non-Facebook content in an app window, to read the session or page content from outside the page, to bypass a permission or the route policy, to make the in-app updater install something other than a genuine release, or to tamper with a release.
 
 Out of scope: vulnerabilities in Facebook/Messenger itself (report them to [Meta](https://www.facebook.com/whitehat)) and in Electron/Chromium (report them [upstream](https://github.com/electron/electron/security)); this project picks up their fixes by updating Electron.
 
-How the app protects your data is described in [PRIVACY.md](PRIVACY.md).
+How the app protects your data is described in [PRIVACY.md](PRIVACY.md); fixed issues are listed in [CHANGELOG.md](CHANGELOG.md).

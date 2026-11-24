@@ -42,7 +42,7 @@ Your login happens inside Facebook's web page. The app is deliberately built so 
 
 These rules are enforced by automated tests in [`test/privacy.test.js`](test/privacy.test.js), which run on every push. If anyone adds code that runs scripts in the page, reads cookies, makes its own network requests, uploads crash reports or weakens the isolation settings, the tests fail.
 
-The whole app is three short files in [`src/`](src/) with no runtime dependencies, so it is practical to read all of it.
+The app is a handful of short files in [`src/`](src/) with no runtime dependencies, so it is practical to read all of it.
 
 ## Verify it yourself
 
@@ -51,10 +51,10 @@ The whole app is three short files in [`src/`](src/) with no runtime dependencie
 Every release file is built by GitHub Actions from a tagged commit and comes with a signed [build provenance attestation](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations). With the [GitHub CLI](https://cli.github.com/):
 
 ```bash
-gh attestation verify Thrum-0.1.0-mac-arm64.zip --repo thangldw/thrum
+gh attestation verify Thrum-0.4.0-mac-arm64.zip --repo thangldw/thrum
 ```
 
-A successful check proves the file was produced by this repository's release workflow and has not been modified since. The install scripts also check every download against the release's `SHA256SUMS.txt`.
+A successful check proves the file was produced by this repository's release workflow and has not been modified since. The install scripts and the in-app updater also check every download against the release's `SHA256SUMS.txt`.
 
 ### 2. No password or autofill store exists
 
@@ -62,7 +62,7 @@ After signing in, look in the `Partitions/messenger` folder listed above. A Chro
 
 ```bash
 # macOS
-ls ~/Library/Application\ Support/Messenger\ Lite/Partitions/messenger | grep -E "Login Data|Web Data" || echo "no password or autofill store"
+ls ~/Library/Application\ Support/Thrum/Partitions/messenger | grep -E "Login Data|Web Data" || echo "no password or autofill store"
 ```
 
 ```powershell
@@ -78,7 +78,7 @@ sqlite3 "file:$HOME/Library/Application Support/Thrum/Partitions/messenger/Cooki
   "select sum(length(encrypted_value)>0) as encrypted, sum(length(value)>0) as plaintext from cookies where host_key like '%facebook.com'"
 ```
 
-On a fresh install, expect `plaintext` to be `0` (or empty). If you signed in with a build from before v0.1.0, cookies are encrypted as Facebook rewrites them; the login cookies (`c_user`, `xs`) are rewritten on the first launch, and Account → **Log out and clear data…** followed by signing in again encrypts all of them at once. You can also confirm the fuses on the installed app:
+Expect `plaintext` to be `0` (or empty). You can also confirm the fuses on the installed app:
 
 ```bash
 npx @electron/fuses read --app "$HOME/Applications/Thrum.app"
@@ -87,17 +87,18 @@ npx @electron/fuses read --app "$HOME/Applications/Thrum.app"
 
 ### 4. The only network traffic is Facebook
 
-Use a network monitor such as Little Snitch or LuLu (macOS), or Resource Monitor → Network (Windows). Connections go to Facebook's domains (`facebook.com`, `fbcdn.net`, and related Meta hosts), never to the author or any third party.
+Use a network monitor such as Little Snitch or LuLu (macOS), or Resource Monitor → Network (Windows). Connections go to Facebook's domains (`facebook.com`, `fbcdn.net`, and related Meta hosts), never to the author or any third party. The only exception is GitHub (`api.github.com`, and `github.com` / `objects.githubusercontent.com` for downloads), and only when you check for or install an update.
 
 ### 5. Read the code
 
 - [`src/main.js`](src/main.js): window, isolation settings, permissions, the injected CSS.
 - [`src/routes.js`](src/routes.js): which URLs stay in the app; pure URL matching.
 - [`src/screen-share.js`](src/screen-share.js): asks you which screen to share during a call.
+- [`src/updater.js`](src/updater.js), [`src/self-update.js`](src/self-update.js): the update check, verified downloads and installing an update; the only code that touches the network.
 
 ## Removing your data
 
-- **In the app:** Account → **Log out and clear data…** deletes the session cookie, Facebook's cache and storage, and the remembered conversation. You will need to sign in again.
+- **In the app:** Accounts → **Log out and clear data…** deletes the session cookie, Facebook's cache and storage, and the remembered conversation. You will need to sign in again.
 - **Forgot the app-lock password:** *Forgot password? Log out and reset…* on the lock screen does the same and turns the lock off. There is no other way past the lock.
 - **Completely:** quit the app, then delete the folder from the first table above.
 
