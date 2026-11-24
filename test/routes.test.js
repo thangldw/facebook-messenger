@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { classify, isFacebookUrl } = require('../src/routes');
+const { classify, isFacebookUrl, downloadTarget } = require('../src/routes');
 
 const cases = {
   allowed: [
@@ -14,6 +14,9 @@ const cases = {
     'https://www.facebook.com/login.php?next=https%3A%2F%2Fwww.facebook.com%2Fmessages%2F',
     'https://www.facebook.com/login/device-based/regular/login/',
     'https://www.facebook.com/checkpoint/1501092823525282/',
+    'https://www.facebook.com/messenger_media/?attachment_id=1&message_id=mid.x&thread_id=2',
+    'https://www.facebook.com/photo/?fbid=123&set=a.1',
+    'https://www.facebook.com/photo.php?fbid=123',
     'https://www.messenger.com/',
     'about:blank',
   ],
@@ -67,4 +70,21 @@ for (const [want, urls] of Object.entries(cases)) {
   for (const url of urls) {
     test(`${want}: ${url}`, () => assert.strictEqual(classify(url), want));
   }
+}
+
+const downloads = [
+  ['https://cdn.fbsbx.com/v/t59.2708-21/file.pdf?_nc_cat=1&oh=x', 'https://cdn.fbsbx.com/v/t59.2708-21/file.pdf?_nc_cat=1&oh=x'],
+  ['blob:https://www.facebook.com/7b5c0a1e-1111-2222-3333-444455556666', 'blob:https://www.facebook.com/7b5c0a1e-1111-2222-3333-444455556666'],
+  ['https://l.facebook.com/l.php?u=https%3A%2F%2Fcdn.fbsbx.com%2Fv%2Fdoc.docx&h=AT0', 'https://cdn.fbsbx.com/v/doc.docx'],
+  // Not Facebook files: never downloaded with the app session.
+  ['blob:https://evil.example/123', null],
+  ['https://fbsbx.com.evil.example/x.pdf', null],
+  ['http://cdn.fbsbx.com/x.pdf', null],
+  ['https://l.facebook.com/l.php?u=https%3A%2F%2Fexample.com%2Fx.pdf', null],
+  ['https://www.facebook.com/messages/', null],
+  ['data:text/html,x', null],
+  [undefined, null],
+];
+for (const [url, want] of downloads) {
+  test(`downloadTarget(${JSON.stringify(url)})`, () => assert.strictEqual(downloadTarget(url), want));
 }

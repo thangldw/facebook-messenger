@@ -21,6 +21,7 @@ Everything lives in one folder on your computer and nowhere else:
 | Form autofill data | — | **No.** Electron has no autofill database. |
 | Session cookie (keeps you signed in) | `Partitions/messenger/Cookies` | Yes, **encrypted** with a key in the macOS Keychain, Windows DPAPI or the Linux secret service. |
 | Facebook's cache, local storage, IndexedDB | `Partitions/messenger/…` | Yes, as in a browser. Written by Facebook's web page, not by the app. Can include recent messages Facebook caches for speed. |
+| Files you download | Where you choose (Downloads by default) | Only when you click download on an attachment or photo. Attachments are always saved as files, never opened inside the app. |
 | App settings | `window-state.json`, `prefs.json` | Yes: window size/position and the "hide top bar" toggle. Nothing else. |
 
 The app sends **nothing** anywhere itself: no analytics, no crash reports, no update checks. The only network traffic is Facebook's web page talking to Facebook, plus links you choose to open in your browser. Spellcheck uses the macOS spellchecker on macOS; on Windows and Linux it is turned off, because Electron would download dictionaries from Google there.

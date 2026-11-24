@@ -3,7 +3,7 @@
 const { app, BrowserWindow, Menu, shell, session, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { classify, isFacebookUrl, HOME_URL } = require('./routes');
+const { classify, isFacebookUrl, downloadTarget, HOME_URL } = require('./routes');
 const { handleDisplayMediaRequest } = require('./screen-share');
 
 const PARTITION = 'persist:messenger';
@@ -74,6 +74,8 @@ function guardContents(wc) {
 
   // Full navigations triggered by the page (link clicks, form posts).
   wc.on('will-navigate', (event, url) => {
+    const file = downloadTarget(url);
+    if (file) { event.preventDefault(); wc.downloadURL(file); return; }
     const kind = classify(url);
     if (kind === 'allowed') return;
     event.preventDefault();
@@ -86,7 +88,8 @@ function guardContents(wc) {
   wc.on('will-redirect', (event) => {
     if (!event.isMainFrame || event.url === 'about:blank' || isFacebookUrl(event.url)) return;
     event.preventDefault();
-    openExternal(event.url);
+    const file = downloadTarget(event.url);
+    if (file) wc.downloadURL(file); else openExternal(event.url);
   });
 
   // Last line of defence if a non-Facebook page still loads in an app window.
@@ -101,6 +104,9 @@ function guardContents(wc) {
   });
 
   wc.setWindowOpenHandler(({ url }) => {
+    // Attachments and "Download" buttons: save the file, never render it.
+    const file = downloadTarget(url);
+    if (file) { wc.downloadURL(file); return { action: 'deny' }; }
     // Call windows must stay in-app to keep the session; they get the same guards.
     if (classify(url) === 'allowed') {
       return {
@@ -155,6 +161,15 @@ function configureSession() {
   ses.setSpellCheckerEnabled(process.platform === 'darwin');
   // macOS 15+ shows the native system picker; elsewhere our handler asks for a source.
   ses.setDisplayMediaRequestHandler(handleDisplayMediaRequest, { useSystemPicker: true });
+
+  // Downloads (chat attachments, saved photos): ask where to save, starting in
+  // Downloads, and reveal the file when done, like a browser.
+  ses.on('will-download', (_e, item) => {
+    item.setSaveDialogOptions({ defaultPath: path.join(app.getPath('downloads'), item.getFilename()) });
+    item.once('done', (_ev, state) => {
+      if (state === 'completed') shell.showItemInFolder(item.getSavePath());
+    });
+  });
 }
 
 // Deletes everything the app keeps for Facebook: cookies (the login session),

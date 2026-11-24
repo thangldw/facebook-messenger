@@ -18,6 +18,8 @@ const ALLOWED_PREFIXES = [
   '/login', '/checkpoint', '/two_step_verification', '/two_factor', '/auth_platform',
   '/recover', '/confirmemail', '/privacy/consent', '/cookie', '/logout', '/security',
   '/encrypted_backups', '/secure_storage', '/e2ee',
+  // Photo/video viewer opened from a chat (lightbox route).
+  '/messenger_media', '/photo',
 ];
 
 const FEED_PATHS = new Set(['/', '/home.php', '/index.php']);
@@ -57,4 +59,25 @@ function isFacebookUrl(rawUrl) {
   return ['facebook.com', 'messenger.com'].some((d) => h === d || h.endsWith(`.${d}`));
 }
 
-module.exports = { classify, isFacebookUrl, HOME_URL };
+// Files sent in chats live on Facebook's attachment CDN (fbsbx.com), and the
+// "Download" button produces blob: URLs. Both need the app's session, so they
+// are downloaded in-app. They are never rendered in an app window: fbsbx.com
+// serves files uploaded by other people, which could be a fake login page.
+// Returns the URL to download, or null.
+function downloadTarget(rawUrl) {
+  if (typeof rawUrl !== 'string') return null;
+  if (rawUrl.startsWith('blob:')) return isFacebookUrl(rawUrl.slice(5)) ? rawUrl : null;
+  let url;
+  try { url = new URL(rawUrl); } catch { return null; }
+  if (url.protocol !== 'https:') return null;
+  const h = url.hostname;
+  if (h === 'fbsbx.com' || h.endsWith('.fbsbx.com')) return url.href;
+  // Link shim: l.facebook.com/l.php?u=<target>
+  if ((h === 'l.facebook.com' || h === 'lm.facebook.com') && url.pathname === '/l.php') {
+    const inner = url.searchParams.get('u');
+    if (inner && inner !== rawUrl) return downloadTarget(inner);
+  }
+  return null;
+}
+
+module.exports = { classify, isFacebookUrl, downloadTarget, HOME_URL };

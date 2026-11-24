@@ -9,6 +9,7 @@ It wraps Facebook's own web client at `facebook.com/messages` (messenger.com was
 ## Features
 
 - **Messages only.** The News Feed, Watch, Reels, Marketplace and similar routes bounce back to your inbox. Profiles, posts and outbound links open in your default browser.
+- **Photos and files** open in the app's photo viewer; attachments download to a folder you choose (Downloads by default).
 - **Voice and video calls**, including the call window, which stays in-app so it shares your login.
 - **Screen sharing** in calls: the native picker on macOS 15+, and a source chooser on Windows, Linux and older macOS. On Windows it can also share system audio.
 - **Native notifications** and an unread count (dock badge on macOS and on Linux launchers that support it; the window title everywhere).
