@@ -6,7 +6,7 @@ const {
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { SERVICES, NONE, serviceFor } = require('./services');
+const { classify, isFacebookUrl, downloadTarget, HOME_URL } = require('./routes');
 const { handleDisplayMediaRequest } = require('./screen-share');
 const { Settings, isChatPath, cleanName, LOCK_MINUTES, MAX_ACCOUNTS } = require('./settings');
 const { AccountView, partitionFor } = require('./account-view');
@@ -23,6 +23,7 @@ const { SettingsWindow } = require('./settings-window');
 const APP_ID = 'io.github.thangldw.thrum';
 const isMac = process.platform === 'darwin';
 const isWin = process.platform === 'win32';
+const FB_ORIGIN = 'https://www.facebook.com';
 // Chosen to avoid common system and app shortcuts; Ctrl+Alt alone is AltGr on
 // many Windows keyboard layouts, so Shift is added there.
 const SHORTCUT = isMac ? 'Control+Alt+M' : 'Control+Alt+Shift+M';
@@ -83,14 +84,10 @@ let updater = null;
 let settingsWin = null;
 let isQuitting = false;
 const configuredPartitions = new Set();
-// Which service each account session belongs to. Popups and call windows share
-// their opener's session, so this is how the guards find their policy.
-const serviceBySession = new WeakMap();
 
 // ---------------------------------------------------------------- helpers
 
-// Facebook serves degraded or "unsupported browser" pages to UAs containing
-// "Electron", and Zalo's sign-in page renders without its QR code.
+// Facebook serves degraded or "unsupported browser" pages to UAs containing "Electron".
 function chromeUserAgent() {
   return app.userAgentFallback
     .replace(/\sElectron\/\S+/, '')
@@ -107,13 +104,13 @@ const totalUnread = () => [...accounts.values()].reduce((n, a) => n + a.unread, 
 
 function startUrlFor(acc) {
   const last = settings.get('lastChats')[acc.id];
-  if (acc.service.restoresChats && settings.get('restoreLastChat') && !ephemeral && isChatPath(last)) return acc.service.origin + last;
-  return acc.service.home;
+  if (settings.get('restoreLastChat') && !ephemeral && isChatPath(last)) return FB_ORIGIN + last;
+  return HOME_URL;
 }
 
 const saveChatTimers = new Map();
 function rememberChat(acc, url) {
-  if (!acc.service.restoresChats || !settings.get('restoreLastChat') || ephemeral) return;
+  if (!settings.get('restoreLastChat') || ephemeral) return;
   let p;
   try { p = new URL(url).pathname; } catch { return; }
   if (!isChatPath(p) || settings.get('lastChats')[acc.id] === p) return;
@@ -129,7 +126,7 @@ function notificationsAllowed() {
 }
 
 function applyCss(acc) {
-  acc.setCss('topbar', HIDE_TOPBAR_CSS, acc.service === SERVICES.facebook && settings.get('hideTopBar'));
+  acc.setCss('topbar', HIDE_TOPBAR_CSS, settings.get('hideTopBar'));
   acc.setCss('privacy', PRIVACY_CSS, settings.get('privacyScreen') && !(mainWindow && mainWindow.isFocused()));
 }
 
@@ -190,7 +187,7 @@ function onUnread() {
     mainWindow.setOverlayIcon(total > 0 ? badge : null, total > 0 ? `${total} unread` : '');
   }
   updateTitle();
-  if (lock && dnd) buildAppMenu(); // unread marks in the Accounts menu
+  if (lock && dnd) buildAppMenu(); // unread counts in the Accounts menu
   if (tray) tray.setUnread(total, { paused: dnd.isPaused() });
   if (settingsWin) settingsWin.push();
 }
@@ -199,7 +196,7 @@ function onUnread() {
 function refreshStatus() {
   const acc = active();
   if (!overlay || !acc) return;
-  overlay.setLayer('offline', acc.status.offline && { ...acc.status.offline, service: acc.service.label });
+  overlay.setLayer('offline', acc.status.offline);
   overlay.setLayer('crashed', acc.status.crashed);
 }
 
@@ -207,58 +204,51 @@ function refreshStatus() {
 
 // Navigation and window-creation policy, applied to every window the app
 // creates: account views, call windows and any popup they open. App windows
-// have no address bar, so nothing but the account's own service (Facebook or
-// Zalo) may ever render in one.
+// have no address bar, so nothing but Facebook may ever render in one.
 function guardContents(wc) {
   const account = () => accountFor(wc);
-  // Looked up per event: the session's service is registered when an account is set up.
-  const svc = () => serviceBySession.get(wc.session) || NONE;
   // The app's own pages register themselves after creation, so this is checked per event.
   const skip = () => isAppPage(wc);
 
   // Full navigations triggered by the page (link clicks, form posts).
   wc.on('will-navigate', (event, url) => {
     if (skip()) { event.preventDefault(); return; }
-    const s = svc();
-    const file = s.downloadTarget(url);
+    const file = downloadTarget(url);
     if (file) { event.preventDefault(); wc.downloadURL(file); return; }
-    const kind = s.classify(url);
+    const kind = classify(url);
     if (kind === 'allowed') return;
     event.preventDefault();
-    if (kind === 'feed') { if (account()) wc.loadURL(s.home); }
+    if (kind === 'feed') { if (account()) wc.loadURL(HOME_URL); }
     else openExternal(url);
   });
 
-  // Server redirects may pass through unlisted paths of the service (login,
+  // Server redirects may pass through unlisted Facebook paths (login,
   // checkpoint), but must never land on a third-party site inside the app.
   wc.on('will-redirect', (event) => {
     if (skip()) { event.preventDefault(); return; }
-    const s = svc();
-    if (!event.isMainFrame || event.url === 'about:blank' || s.isOwnUrl(event.url)) return;
+    if (!event.isMainFrame || event.url === 'about:blank' || isFacebookUrl(event.url)) return;
     event.preventDefault();
-    const file = s.downloadTarget(event.url);
+    const file = downloadTarget(event.url);
     if (file) wc.downloadURL(file); else openExternal(event.url);
   });
 
-  // Last line of defence if a page of another site still loads in an app window.
+  // Last line of defence if a non-Facebook page still loads in an app window.
   wc.on('did-navigate', (_e, url) => {
     if (skip() || url === 'about:blank') return;
-    const s = svc();
-    if (!s.isOwnUrl(url)) {
-      if (account()) wc.loadURL(s.home); else wc.close();
+    if (!isFacebookUrl(url)) {
+      if (account()) wc.loadURL(HOME_URL); else wc.close();
       return;
     }
     // Post-login redirect to "/" and similar: back to the inbox.
-    if (account() && s.classify(url) === 'feed') wc.loadURL(s.home);
+    if (account() && classify(url) === 'feed') wc.loadURL(HOME_URL);
   });
 
   wc.setWindowOpenHandler(({ url }) => {
     // Attachments and "Download" buttons: save the file, never render it.
-    const s = svc();
-    const file = s.downloadTarget(url);
+    const file = downloadTarget(url);
     if (file) { wc.downloadURL(file); return { action: 'deny' }; }
     // Call windows must stay in-app to keep the account's session; they get the same guards.
-    if (s.classify(url) === 'allowed') {
+    if (classify(url) === 'allowed') {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
@@ -273,14 +263,14 @@ function guardContents(wc) {
 }
 
 function attachAccountBehaviour(acc) {
-  const { wc, service } = acc;
-  // Both sites are SPAs: clicking Facebook's logo or a profile name is a pushState.
+  const { wc } = acc;
+  // Facebook is an SPA: clicking the logo or a profile name is a pushState.
   wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
     if (!isMainFrame) return;
-    const kind = service.classify(url);
+    const kind = classify(url);
     if (kind === 'allowed') { rememberChat(acc, url); return; }
     if (kind !== 'feed') openExternal(url);
-    wc.loadURL(service.home);
+    wc.loadURL(HOME_URL);
   });
   wc.on('did-navigate', (_e, url) => rememberChat(acc, url));
   wc.on('dom-ready', () => applyCss(acc));
@@ -288,29 +278,27 @@ function attachAccountBehaviour(acc) {
 
 // ---------------------------------------------------------------- sessions
 
-function configureSession(partition, service) {
+function configureSession(partition) {
   if (configuredPartitions.has(partition)) return;
   configuredPartitions.add(partition);
   const ses = session.fromPartition(partition);
-  serviceBySession.set(ses, service);
   ses.setUserAgent(chromeUserAgent());
 
-  // Granted only to the service's own frames (Facebook or Zalo), never to
-  // embedded third-party iframes.
+  // Granted only to Facebook's own frames, never to embedded third-party iframes.
   // Notifications are additionally withheld while paused (Do Not Disturb) or locked.
   const allowed = new Set(['notifications', 'media', 'display-capture', 'clipboard-sanitized-write', 'fullscreen']);
   ses.setPermissionRequestHandler((_wc, permission, cb, details) => {
-    cb(allowed.has(permission) && service.isOwnUrl(details.requestingUrl));
+    cb(allowed.has(permission) && isFacebookUrl(details.requestingUrl));
   });
   ses.setPermissionCheckHandler((_wc, permission, requestingOrigin) => {
-    if (!allowed.has(permission) || !service.isOwnUrl(requestingOrigin)) return false;
+    if (!allowed.has(permission) || !isFacebookUrl(requestingOrigin)) return false;
     return permission === 'notifications' ? notificationsAllowed() : true;
   });
   // Spellcheck dictionaries are downloaded from Google's CDN on Windows/Linux;
-  // macOS uses the OS spellchecker. Keep the app's traffic to the services only.
+  // macOS uses the OS spellchecker. Keep the app's traffic Facebook-only.
   ses.setSpellCheckerEnabled(process.platform === 'darwin');
   // macOS 15+ shows the native system picker; elsewhere our handler asks for a source.
-  ses.setDisplayMediaRequestHandler((request, cb) => handleDisplayMediaRequest(service.isOwnUrl, request, cb), { useSystemPicker: true });
+  ses.setDisplayMediaRequestHandler(handleDisplayMediaRequest, { useSystemPicker: true });
 
   // Downloads (chat attachments, saved photos): ask where to save, starting in
   // Downloads, and reveal the file when done, like a browser.
@@ -333,14 +321,13 @@ async function clearPartition(partition) {
 
 // ---------------------------------------------------------------- accounts
 
-function addAccountView({ id, name, service }) {
+function addAccountView({ id, name }) {
   // Before the view exists: a webContents takes its user agent from the session
   // when it is created, so a later setUserAgent would not reach the page.
-  configureSession(partitionFor(id, ephemeral, service), serviceFor(service));
+  configureSession(partitionFor(id, ephemeral));
   const acc = new AccountView({
     id,
     name,
-    service,
     ephemeral,
     startUrl: startUrlFor,
     onUnread,
@@ -375,19 +362,16 @@ function switchAccount(id) {
   if (mainWindow && mainWindow.isVisible()) focusActive();
 }
 
-async function addAccount({ service = 'facebook' } = {}) {
-  if (!SERVICES[service]) return { ok: false, error: 'Unknown service.' };
+async function addAccount() {
   const list = settings.get('accounts');
   if (list.length >= MAX_ACCOUNTS) return { ok: false, error: `You can add up to ${MAX_ACCOUNTS} accounts.` };
   let id;
   do { id = crypto.randomBytes(4).toString('hex'); } while (list.some((a) => a.id === id));
-  // "Account 2" for Facebook (as before v0.4), "Zalo 1" for Zalo.
-  const prefix = service === 'facebook' ? 'Account' : SERVICES[service].label;
-  let n = service === 'facebook' ? list.length + 1 : 1;
-  while (list.some((a) => a.name === `${prefix} ${n}`)) n += 1;
-  const name = `${prefix} ${n}`;
-  settings.set('accounts', [...list, { id, name, service }]);
-  addAccountView({ id, name, service });
+  let n = list.length + 1;
+  while (list.some((a) => a.name === `Account ${n}`)) n += 1;
+  const name = `Account ${n}`;
+  settings.set('accounts', [...list, { id, name }]);
+  addAccountView({ id, name });
   switchAccount(id);
   showWindow();
   return { ok: true };
@@ -410,7 +394,7 @@ async function removeAccount({ id } = {}) {
   const list = settings.get('accounts');
   if (!acc) return { ok: false, error: 'Unknown account.' };
   if (list.length === 1) return { ok: false, error: 'You need at least one account.' };
-  const ok = await confirm(`Remove "${acc.name}"?`, `This logs the account out and deletes its data in this app. Your ${acc.service.label} account itself is not affected.`, 'Remove');
+  const ok = await confirm(`Remove "${acc.name}"?`, 'This logs the account out and deletes its data in this app. Your Facebook account itself is not affected.', 'Remove');
   if (!ok) return { ok: false };
   const remaining = list.filter((a) => a.id !== id);
   settings.set('accounts', remaining);
@@ -432,7 +416,7 @@ async function logOutActive() {
   const acc = active();
   const ok = await confirm(
     accounts.size > 1 ? `Log out of "${acc.name}" and delete its data?` : 'Log out and delete all local data?',
-    `This removes the ${acc.service.label} session, cached messages and settings stored by ${acc.service.label} in this app. You will need to sign in again.`,
+    'This removes the Facebook session, cached messages and settings stored by Facebook in this app. You will need to sign in again.',
     'Log out and clear',
   );
   if (!ok) return;
@@ -440,7 +424,7 @@ async function logOutActive() {
   const chats = settings.get('lastChats');
   delete chats[acc.id];
   settings.set('lastChats', chats);
-  acc.wc.loadURL(acc.service.home);
+  acc.wc.loadURL(HOME_URL);
 }
 
 // "Forgot password" on the lock screen: the only way past the lock without the
@@ -448,14 +432,14 @@ async function logOutActive() {
 async function resetEverything() {
   const ok = await confirm(
     'Log out and reset Thrum?',
-    'This deletes the sessions and data of all accounts in this app and turns off the app lock. You will need to sign in to each account again.',
+    'This deletes the Facebook sessions and data of all accounts in this app and turns off the app lock. You will need to sign in to Facebook again.',
     'Log out and reset',
   );
   if (!ok) return;
   for (const acc of accounts.values()) await clearPartition(acc.partition);
   settings.set('lastChats', {});
   lock.disable();
-  for (const acc of accounts.values()) acc.wc.loadURL(acc.service.home);
+  for (const acc of accounts.values()) acc.wc.loadURL(HOME_URL);
 }
 
 async function setEphemeral(on) {
@@ -463,12 +447,12 @@ async function setEphemeral(on) {
     on ? 'Turn on private mode?' : 'Turn off private mode?',
     on
       ? 'Nothing is written to disk: all accounts are logged out whenever you quit. This also logs them out now and deletes the data stored so far. Thrum will restart.'
-      : 'Logins and cached messages will be kept between launches again. Thrum will restart.',
+      : 'Logins and Facebook cache will be kept between launches again. Thrum will restart.',
     'Restart',
   );
   if (!ok) { rebuildMenus(); return; }
   if (on) {
-    for (const { id, service } of settings.get('accounts')) await clearPartition(partitionFor(id, false, service));
+    for (const { id } of settings.get('accounts')) await clearPartition(partitionFor(id, false));
     settings.set('lastChats', {});
   }
   settings.set('ephemeral', on);
@@ -521,14 +505,7 @@ function openSettings(section) {
 function settingsState() {
   const end = dnd.focusUntil();
   return {
-    accounts: settings.get('accounts').map((a) => ({
-      ...a,
-      serviceLabel: serviceFor(a.service).label,
-      active: a.id === activeId,
-      unread: accounts.has(a.id) ? accounts.get(a.id).unread : 0,
-      countsUnread: serviceFor(a.service).countsUnread,
-    })),
-    services: Object.values(SERVICES).map((s) => ({ id: s.id, label: s.label })),
+    accounts: settings.get('accounts').map((a) => ({ ...a, active: a.id === activeId, unread: accounts.has(a.id) ? accounts.get(a.id).unread : 0 })),
     maxAccounts: MAX_ACCOUNTS,
     maxRules: MAX_RULES,
     focus: {
@@ -633,8 +610,7 @@ function lockItems() {
 function accountSwitchItems({ withShortcuts }) {
   return settings.get('accounts').map((a, i) => {
     const acc = accounts.get(a.id);
-    // Zalo only says "new messages", not how many.
-    const unread = acc && acc.unread ? (acc.service.countsUnread ? ` (${acc.unread})` : ' •') : '';
+    const unread = acc && acc.unread ? ` (${acc.unread})` : '';
     return {
       label: `${a.name}${unread}`,
       type: 'radio',
@@ -682,7 +658,7 @@ function buildAppMenu() {
     {
       label: 'View',
       submenu: [
-        { label: 'Messages', accelerator: 'CmdOrCtrl+Shift+M', enabled: !locked, click: () => active() && active().wc.loadURL(active().service.home) },
+        { label: 'Messages', accelerator: 'CmdOrCtrl+Shift+M', enabled: !locked, click: () => active() && active().wc.loadURL(HOME_URL) },
         { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => active() && active().wc.reload() },
         { type: 'separator' },
         { label: 'Open current page in browser', enabled: !locked, click: () => active() && openExternal(active().wc.getURL()) },
@@ -701,11 +677,7 @@ function buildAppMenu() {
       submenu: [
         ...accountSwitchItems({ withShortcuts: true }),
         { type: 'separator' },
-        ...Object.values(SERVICES).map((s) => ({
-          label: `Add ${s.label} account`,
-          enabled: !locked && accounts.size < MAX_ACCOUNTS,
-          click: () => addAccount({ service: s.id }),
-        })),
+        { label: 'Add account', enabled: !locked && accounts.size < MAX_ACCOUNTS, click: () => addAccount() },
         { label: 'Manage accounts…', enabled: !locked, click: () => openSettings('accounts') },
         { type: 'separator' },
         { label: accounts.size > 1 && active() ? `Log out of "${active().name}"…` : 'Log out and clear data…', enabled: !locked, click: () => logOutActive() },

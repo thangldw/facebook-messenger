@@ -92,14 +92,13 @@ PackageName: Thrum
 PackageUrl: https://github.com/${REPO}
 License: Apache-2.0
 LicenseUrl: https://github.com/${REPO}/blob/main/LICENSE
-ShortDescription: Desktop app for Facebook Messenger and Zalo, with the News Feed blocked.
-Description: Thrum wraps Facebook's own web client at facebook.com/messages and Zalo Web in a desktop app, without the News Feed, Watch or Marketplace. It never sees or stores your password and sends no data anywhere itself.
+ShortDescription: Desktop app for Facebook Messenger with the News Feed blocked.
+Description: Thrum wraps Facebook's own web client at facebook.com/messages in a desktop app, without the News Feed, Watch or Marketplace. It never sees or stores your password and sends no data anywhere but Facebook.
 Tags:
   - chat
   - facebook
   - messenger
   - messaging
-  - zalo
 ReleaseNotesUrl: https://github.com/${REPO}/releases/tag/v${version}
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0

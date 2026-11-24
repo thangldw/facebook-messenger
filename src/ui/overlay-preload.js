@@ -1,6 +1,6 @@
 'use strict';
 
-// Preload for the app's own overlay page only (never for Facebook's or Zalo's pages).
+// Preload for the app's own overlay page only (never for Facebook's pages).
 // Exposes a fixed set of calls; arguments are coerced to strings.
 
 const { contextBridge, ipcRenderer } = require('electron');

@@ -7,7 +7,6 @@
 const fs = require('fs');
 const path = require('path');
 const { normalizeRules } = require('./focus');
-const { SERVICE_IDS } = require('./services');
 
 const LOCK_MINUTES = [1, 5, 15, 60];
 const MAX_ACCOUNTS = 9;
@@ -53,19 +52,16 @@ const SCHEMA = {
   lockHash: hex(128),
   lastUpdateCheck: num(0, (v) => v >= 0),
   accounts: {
-    default: [{ id: 'default', name: 'Account 1', service: 'facebook' }],
+    default: [{ id: 'default', name: 'Account 1' }],
     parse: (v) => {
       if (!Array.isArray(v) || v.length === 0 || v.length > MAX_ACCOUNTS) return undefined;
       const out = [];
       for (const a of v) {
         const name = a && cleanName(a.name);
         if (!a || !ACCOUNT_ID.test(a.id) || !name || out.some((o) => o.id === a.id)) return undefined;
-        // Accounts from before v0.4 have no service: they are Facebook accounts.
-        const service = a.service === undefined ? 'facebook' : a.service;
-        if (!SERVICE_IDS.includes(service)) continue; // from a newer version: skip, keep the rest
-        out.push({ id: a.id, name, service });
+        out.push({ id: a.id, name });
       }
-      return out.length > 0 ? out : undefined;
+      return out;
     },
   },
   activeAccount: { default: 'default', parse: (v) => (typeof v === 'string' && ACCOUNT_ID.test(v) ? v : undefined) },

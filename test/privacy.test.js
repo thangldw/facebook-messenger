@@ -85,12 +85,9 @@ test('settings window IPC accepts only its own page and a fixed set of actions',
 
 test('accounts never share a session', () => {
   const account = code('account-view.js');
-  assert.match(account, /this\.partition = this\.service\.partition\(id, ephemeral\);/);
+  assert.match(account, /return id === 'default' \? 'persist:messenger' : `persist:messenger-\$\{id\}`;/);
+  assert.match(account, /if \(ephemeral\) return `messenger-private-\$\{id\}`;/);
   assert.match(account, /partition: this\.partition,/);
-  const services = code('services.js');
-  assert.match(services, /return id === 'default' \? 'persist:messenger' : `persist:messenger-\$\{id\}`;/);
-  assert.match(services, /if \(ephemeral\) return `messenger-private-\$\{id\}`;/);
-  assert.match(services, /\(ephemeral \? `zalo-private-\$\{id\}` : `persist:zalo-\$\{id\}`\)/);
 });
 
 test('update check: off by default, GitHub releases API only, no cookies', () => {
@@ -134,33 +131,16 @@ test('every window is guarded and <webview> is blocked', () => {
   assert.match(main, /setWindowOpenHandler/);
 });
 
-test('permissions and screen capture are limited to the account service\'s own origins', () => {
-  assert.match(main, /setPermissionRequestHandler\([^]*?service\.isOwnUrl\(details\.requestingUrl\)/);
-  assert.match(main, /setPermissionCheckHandler\([^]*?service\.isOwnUrl\(requestingOrigin\)/);
-  assert.match(main, /handleDisplayMediaRequest\(service\.isOwnUrl, request, cb\)/);
-  assert.match(code('screen-share.js'), /if \(!isOwnUrl\(request\.securityOrigin\)\) return callback\(null\);/);
-  const routes = require('../src/routes');
-  const { SERVICES, NONE } = require('../src/services');
-  assert.strictEqual(SERVICES.facebook.isOwnUrl, routes.isFacebookUrl);
-  assert.strictEqual(SERVICES.zalo.isOwnUrl, routes.isZaloUrl);
-  // Each service trusts only its own origins, never the other's.
-  assert.ok(!SERVICES.zalo.isOwnUrl('https://www.facebook.com'));
-  assert.ok(!SERVICES.facebook.isOwnUrl('https://chat.zalo.me'));
-  // Windows whose session belongs to no account get nothing.
-  assert.ok(!NONE.isOwnUrl('https://www.facebook.com') && !NONE.isOwnUrl('https://chat.zalo.me'));
-  assert.strictEqual(NONE.classify('https://www.facebook.com/messages/'), 'external');
-  assert.strictEqual(NONE.downloadTarget('https://x.fbsbx.com/f'), null);
+test('permissions and screen capture are limited to Facebook origins', () => {
+  assert.match(main, /setPermissionRequestHandler\([^]*?isFacebookUrl\(details\.requestingUrl\)/);
+  assert.match(main, /setPermissionCheckHandler\([^]*?isFacebookUrl\(requestingOrigin\)/);
+  const share = code('screen-share.js');
+  assert.match(share, /isFacebookUrl\(request\.securityOrigin\)/);
 });
 
 test('the session (user agent, permissions) is configured before an account view is created', () => {
   const fn = main.slice(main.indexOf('function addAccountView('));
   assert.ok(fn.indexOf('configureSession(') > 0 && fn.indexOf('configureSession(') < fn.indexOf('new AccountView('));
-});
-
-test('guards take their policy from the window\'s session, defaulting to nothing allowed', () => {
-  assert.match(main, /const svc = \(\) => serviceBySession\.get\(wc\.session\) \|\| NONE;/);
-  assert.match(main, /serviceBySession\.set\(ses, service\);/);
-  assert.doesNotMatch(main, /isFacebookUrl|require\('\.\/routes'\)/, 'main.js must not bypass the service policy');
 });
 
 test('packaged builds refuse remote-debugging switches', () => {

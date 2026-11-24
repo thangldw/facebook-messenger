@@ -16,7 +16,7 @@ kbd {
 
 .account {
   display: grid;
-  grid-template-columns: auto 1fr auto auto auto;
+  grid-template-columns: 1fr auto auto auto;
   gap: 8px;
   align-items: center;
   padding: 8px;
@@ -26,15 +26,6 @@ kbd {
 }
 .account.active { border-color: var(--accent); }
 .account .name { height: 36px; }
-.account .service {
-  padding: 0 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  font-size: 12px;
-  line-height: 22px;
-  color: var(--muted);
-}
-.add-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .badge {
   min-width: 22px;

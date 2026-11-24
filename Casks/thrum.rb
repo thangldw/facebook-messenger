@@ -13,7 +13,7 @@ cask "thrum" do
 
   url "https://github.com/thangldw/thrum/releases/download/v#{version}/Thrum-#{version}-mac-#{arch}.zip"
   name "Thrum"
-  desc "Desktop app for Facebook Messenger and Zalo"
+  desc "Desktop app for Facebook Messenger with the News Feed blocked"
   homepage "https://github.com/thangldw/thrum"
 
   livecheck do
