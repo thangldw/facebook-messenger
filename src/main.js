@@ -12,9 +12,11 @@ const PREFS_FILE = () => path.join(app.getPath('userData'), 'prefs.json');
 
 // Hides Facebook's global top bar (Home/Watch/Marketplace...). Best-effort:
 // Facebook class names are obfuscated, so we only rely on ARIA roles.
+// Layout sizes are calc(100vh - var(--header-height)), and theme containers
+// below :root redefine the variable (56px), so it must be zeroed on every element.
 const HIDE_TOPBAR_CSS = `
   div[role="banner"] { display: none !important; }
-  :root { --header-height: 0px !important; }
+  :root, :root * { --header-height: 0px !important; }
 `;
 
 let mainWindow = null;
