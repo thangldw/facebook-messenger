@@ -91,6 +91,8 @@ test('password: hash verifies, wrong password does not, hash is salted', () => {
 
 test('password: too short or too long is rejected', () => {
   assert.throws(() => hashPassword('abc'));
+  assert.throws(() => hashPassword('abcde'));
+  assert.doesNotThrow(() => hashPassword('abcdef'));
   assert.throws(() => hashPassword('x'.repeat(257)));
 });
 
@@ -108,6 +110,30 @@ test('password: throttle after 5 failures, growing, reset on success', () => {
   t.succeed();
   t.fail();
   assert.strictEqual(t.waitMs(), 0);
+});
+
+test('password: an existing shorter password (old 4-character minimum) still verifies', () => {
+  const crypto = require('crypto');
+  const salt = crypto.randomBytes(16);
+  const hash = crypto.scryptSync('abcd', salt, 64, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+  assert.ok(verifyPassword('abcd', salt.toString('hex'), hash.toString('hex')));
+});
+
+test('password: throttle state survives a restart through its store, capped after a clock change', () => {
+  let now = 0;
+  let saved = { failures: 0, blockedUntil: 0 };
+  const store = { load: () => saved, save: (s) => { saved = s; } };
+  const t = new Throttle(() => now, store);
+  for (let i = 0; i < 5; i += 1) t.fail();
+  assert.deepStrictEqual(saved, { failures: 5, blockedUntil: 30000 });
+  const restarted = new Throttle(() => now, store);
+  assert.strictEqual(restarted.waitMs(), 30000);
+  restarted.fail();
+  assert.strictEqual(restarted.waitMs(), 60000);
+  now = -1e9; // clock moved far back
+  assert.strictEqual(restarted.waitMs(), 300000);
+  restarted.succeed();
+  assert.deepStrictEqual(saved, { failures: 0, blockedUntil: 0 });
 });
 
 // ---- do not disturb

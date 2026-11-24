@@ -41,11 +41,18 @@ const HIDE_TOPBAR_CSS = `
 // Privacy screen: blur the page while the window is not focused.
 const PRIVACY_CSS = 'html { filter: blur(24px) saturate(0.6) !important; }';
 
-// A remote-debugging port lets any local process read the page and its cookies
-// over the DevTools protocol, bypassing cookie encryption. Fuses already block
-// --inspect; refuse Chromium's debugging switches in packaged builds too.
-const DEBUG_SWITCHES = ['remote-debugging-port', 'remote-debugging-pipe', 'remote-debugging-address'];
-if (app.isPackaged && DEBUG_SWITCHES.some((s) => app.commandLine.hasSwitch(s))) {
+// Chromium switches that would let another local program get at the Facebook
+// session: a remote-debugging port exposes the page and its cookies over the
+// DevTools protocol (bypassing cookie encryption), and the network switches let
+// it sit between the app and Facebook (a proxy or rewritten DNS, with
+// certificate errors ignored). Fuses already block --inspect; packaged builds
+// refuse these too. A proxy still works through the system proxy settings.
+const BLOCKED_SWITCHES = [
+  'remote-debugging-port', 'remote-debugging-pipe', 'remote-debugging-address',
+  'proxy-server', 'proxy-pac-url', 'host-resolver-rules', 'host-rules',
+  'ignore-certificate-errors', 'ignore-certificate-errors-spki-list', 'disable-web-security',
+];
+if (app.isPackaged && BLOCKED_SWITCHES.some((s) => app.commandLine.hasSwitch(s))) {
   app.exit(1);
 }
 

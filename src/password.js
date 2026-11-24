@@ -5,7 +5,8 @@
 
 const crypto = require('crypto');
 
-const MIN_LENGTH = 4;
+// Applies to new passwords only; an existing shorter one still unlocks.
+const MIN_LENGTH = 6;
 const MAX_LENGTH = 256;
 const SCRYPT = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 
@@ -27,29 +28,42 @@ function verifyPassword(password, saltHex, hashHex) {
   return crypto.timingSafeEqual(actual, expected);
 }
 
+const MAX_WAIT_MS = 300000;
+
 // Slows down guessing: after 5 failures, each further attempt waits longer
-// (30 s, 60 s, ... capped at 5 min).
+// (30 s, 60 s, ... capped at 5 min). With a store ({ load(), save(state) }) the
+// count survives a restart, so quitting and relaunching does not reset it.
 class Throttle {
-  constructor(now = () => Date.now()) {
+  constructor(now = () => Date.now(), store = null) {
     this.now = now;
-    this.failures = 0;
-    this.blockedUntil = 0;
+    this.store = store;
+    const saved = store ? store.load() : null;
+    this.failures = saved ? saved.failures : 0;
+    this.blockedUntil = saved ? saved.blockedUntil : 0;
   }
 
   waitMs() {
-    return Math.max(0, this.blockedUntil - this.now());
+    // Capped, so a saved time is never longer than one wait (e.g. after the clock went back).
+    return Math.min(Math.max(0, this.blockedUntil - this.now()), MAX_WAIT_MS);
   }
 
   fail() {
     this.failures += 1;
     if (this.failures >= 5) {
-      this.blockedUntil = this.now() + Math.min(30000 * (this.failures - 4), 300000);
+      this.blockedUntil = this.now() + Math.min(30000 * (this.failures - 4), MAX_WAIT_MS);
     }
+    this.persist();
   }
 
   succeed() {
+    if (this.failures === 0 && this.blockedUntil === 0) return;
     this.failures = 0;
     this.blockedUntil = 0;
+    this.persist();
+  }
+
+  persist() {
+    if (this.store) this.store.save({ failures: this.failures, blockedUntil: this.blockedUntil });
   }
 }
 
