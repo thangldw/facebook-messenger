@@ -57,6 +57,10 @@ jobs:
           node-version: 22
       - run: npm ci
       - run: npm test
+        env:
+          # As in ci.yml: the tests never start Electron, and without this each test file
+          # that loads it downloads the binary lazily; the parallel downloads race on Windows.
+          ELECTRON_OVERRIDE_DIST_PATH: ${{ runner.temp }}
       - name: Build
         shell: bash
         run: ${{ matrix.build }}
