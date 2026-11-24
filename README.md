@@ -169,4 +169,4 @@ If a login, security or call step ever gets sent to your browser, add its path p
 
 ## License
 
-[MIT](LICENSE)
+[Apache License 2.0](LICENSE)

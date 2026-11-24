@@ -6,7 +6,7 @@
   "main": "src/main.js",
   "private": true,
   "author": "Thang <thangldw@gmail.com>",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/thangldw/thrum.git"
