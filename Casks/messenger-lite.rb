@@ -5,9 +5,9 @@
 cask "messenger-lite" do
   arch arm: "arm64", intel: "x64"
 
-  version "0.1.2"
-  sha256 arm:   "7986e5dbb8c15c4f4eb149c5d943e4b28eb38207b52999cab00f91ebca626bef",
-         intel: "b0fae1c92ddacbee75b6d2bdd6e00bd44932074ea62b87d1f272bcee7fd41610"
+  version "0.2.0"
+  sha256 arm:   "05e1fedbdc579acd3992b81c7f307a2db152d119ee4f880ecebe6ed43ac57bf9",
+         intel: "4b650cada413e87db7ac37dc001648c2a5f060aad802207584e86114a023b271"
 
   url "https://github.com/thangldw/facebook-messenger/releases/download/v#{version}/MessengerLite-#{version}-mac-#{arch}.zip"
   name "Messenger Lite"
