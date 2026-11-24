@@ -14,7 +14,8 @@ const sources = fs.readdirSync(SRC)
   .filter((f) => f.endsWith('.js'))
   // Strip comments so they cannot satisfy or trip a check. A line comment must
   // start the line or follow whitespace, so "\/\/" in regexes and "https://" survive.
-  .map((f) => ({ file: f, code: fs.readFileSync(path.join(SRC, f), 'utf8').replace(/(^|\s)\/\/.*$|\/\*[\s\S]*?\*\//gm, '$1') }));
+  // Normalise CRLF first: Windows checkouts may convert line endings.
+  .map((f) => ({ file: f, code: fs.readFileSync(path.join(SRC, f), 'utf8').replace(/\r\n/g, '\n').replace(/(^|\s)\/\/.*$|\/\*[\s\S]*?\*\//gm, '$1') }));
 const main = sources.find((s) => s.file === 'main.js').code;
 const pkg = require('../package.json');
 

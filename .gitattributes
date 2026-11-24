@@ -1,0 +1,4 @@
+# Same bytes on every OS: tests and checksums must not depend on core.autocrlf.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.png binary

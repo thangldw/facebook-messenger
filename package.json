@@ -1,7 +1,7 @@
 {
   "name": "messenger-lite",
   "productName": "Messenger Lite",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Personal desktop wrapper for facebook.com/messages with the News Feed blocked",
   "main": "src/main.js",
   "private": true,
@@ -26,8 +26,13 @@
   },
   "build": {
     "appId": "local.personal.messenger-lite",
-    "files": ["src/**/*", "package.json"],
-    "directories": { "buildResources": "build" },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build"
+    },
     "electronFuses": {
       "enableCookieEncryption": true,
       "runAsNode": false,
@@ -39,8 +44,20 @@
     },
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["arm64", "x64"] },
-        { "target": "zip", "arch": ["arm64", "x64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
       ],
       "category": "public.app-category.social-networking",
       "identity": "-",
@@ -53,8 +70,18 @@
     },
     "win": {
       "target": [
-        { "target": "zip", "arch": ["x64"] },
-        { "target": "nsis", "arch": ["x64"] }
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "artifactName": "MessengerLite-${version}-win-${arch}.${ext}"
     },
@@ -62,7 +89,14 @@
       "artifactName": "MessengerLite-${version}-win-setup.${ext}"
     },
     "linux": {
-      "target": [{ "target": "AppImage", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "category": "Network",
       "artifactName": "MessengerLite-${version}-linux-${arch}.${ext}"
     }
