@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- App lock: wrong-password slowdown now survives quitting and relaunching. New passwords need at least 6 characters (an existing shorter password keeps working). PRIVACY.md now says plainly that someone who can edit your files can turn the lock off.
+- Packaged builds refuse to start with Chromium switches that would let another program intercept the Facebook session: `--proxy-server`, `--proxy-pac-url`, `--host-resolver-rules`, `--host-rules`, `--ignore-certificate-errors`, `--ignore-certificate-errors-spki-list` and `--disable-web-security` (as well as the remote-debugging switches already refused). If you need a proxy, set it in your system's proxy settings, which Thrum uses.
+- Release workflow: the winget submission job downloads a pinned `wingetcreate.exe` and checks its SHA-256.
+
 ## 0.4.0
 
 - **Updates itself.** *Check for Updates…* → **Update now** downloads the release for your system from GitHub, verifies it against the release's SHA-256 checksums, and installs it on restart, keeping the old version until the new one is in place. *Later* installs it the next time you quit. Works for the macOS app, the Windows zip and setup installs, and the Linux AppImage; Homebrew and `.deb` installs keep using their package manager.
