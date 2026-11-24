@@ -10,33 +10,79 @@ const fs = require('fs');
 const path = require('path');
 
 const SRC = path.join(__dirname, '..', 'src');
-const sources = fs.readdirSync(SRC)
+const read = (f) => fs.readFileSync(path.join(SRC, f), 'utf8').replace(/\r\n/g, '\n');
+const sources = fs.readdirSync(SRC, { recursive: true })
+  .map((f) => f.split(path.sep).join('/'))
   .filter((f) => f.endsWith('.js'))
   // Strip comments so they cannot satisfy or trip a check. A line comment must
   // start the line or follow whitespace, so "\/\/" in regexes and "https://" survive.
   // Normalise CRLF first: Windows checkouts may convert line endings.
   .map((f) => ({ file: f, code: fs.readFileSync(path.join(SRC, f), 'utf8').replace(/\r\n/g, '\n').replace(/(^|\s)\/\/.*$|\/\*[\s\S]*?\*\//gm, '$1') }));
-const main = sources.find((s) => s.file === 'main.js').code;
+const code = (file) => sources.find((s) => s.file === file).code;
+const main = code('main.js');
 const pkg = require('../package.json');
 
+// Each rule may name the only files allowed to use it, with the reason
+// enforced by the dedicated tests further down.
+const OVERLAY_FILES = ['overlay.js', 'ui/overlay-preload.js']; // app's own lock/recovery page
 const FORBIDDEN = {
-  'runs script inside the page (could read form fields)': /\bexecuteJavaScript(InIsolatedWorld)?\b/,
-  'injects a preload script into the page': /\bpreload\b/,
-  'IPC channel between page and app': /\b(ipcMain|ipcRenderer|contextBridge)\b/,
-  'reads or writes cookies': /\bcookies\s*\./,
-  'intercepts or inspects network traffic': /\b(webRequest|protocol\.handle|debugger\.attach)\b/,
-  'makes its own network requests': /\b(fetch\s*\(|net\.request|require\(['"]https?['"]\)|XMLHttpRequest)/,
-  'uploads crash reports': /\bcrashReporter\b/,
-  'phones home for updates': /\bautoUpdater\b/,
-  'reads page console output': /console-message/,
+  'runs script inside the page (could read form fields)': [/\bexecuteJavaScript(InIsolatedWorld)?\b/],
+  'injects a preload script into the page': [/\bpreload\b/, OVERLAY_FILES],
+  'IPC channel between page and app': [/\b(ipcMain|ipcRenderer|contextBridge)\b/, OVERLAY_FILES],
+  'reads or writes cookies': [/\bcookies\s*\./],
+  'intercepts or inspects network traffic': [/\b(webRequest|protocol\.handle|debugger\.attach)\b/],
+  'makes its own network requests': [/\b(fetch\s*\(|net\.request|require\(['"]https?['"]\)|XMLHttpRequest)/, ['updater.js']],
+  'uploads crash reports': [/\bcrashReporter\b/],
+  'phones home for updates': [/\bautoUpdater\b/],
+  'reads page console output': [/console-message/],
 };
 
-for (const [what, re] of Object.entries(FORBIDDEN)) {
-  test(`app code never ${what}`, () => {
-    const hits = sources.filter((s) => re.test(s.code)).map((s) => s.file);
+for (const [what, [re, allowedIn = []]] of Object.entries(FORBIDDEN)) {
+  test(`app code never ${what}${allowedIn.length ? ` (except ${allowedIn.join(', ')})` : ''}`, () => {
+    const hits = sources.filter((s) => re.test(s.code) && !allowedIn.includes(s.file)).map((s) => s.file);
     assert.deepStrictEqual(hits, [], `found in: ${hits.join(', ')}`);
   });
 }
+
+test('Facebook pages never get a preload or IPC: only the overlay view does', () => {
+  // main.js creates every window that shows Facebook; it must not mention preload at all.
+  assert.doesNotMatch(main, /\bpreload\b/);
+  const overlay = code('overlay.js');
+  assert.match(overlay, /new WebContentsView\(/);
+  assert.match(overlay, /preload: path\.join\(__dirname, 'ui', 'overlay-preload\.js'\)/);
+  assert.match(overlay, /wc\.loadFile\(/, 'overlay loads a local file only');
+  assert.doesNotMatch(overlay, /loadURL\(/);
+});
+
+test('overlay IPC accepts only its own page and a fixed set of actions', () => {
+  const overlay = code('overlay.js');
+  assert.match(overlay, /if \(event\.sender !== wc \|\| !ACTIONS\.has\(action\)\) throw/);
+  assert.match(overlay, /wc\.on\('will-navigate', \(e\) => e\.preventDefault\(\)\)/);
+  assert.match(overlay, /setWindowOpenHandler\(\(\) => \(\{ action: 'deny' \}\)\)/);
+  const html = read('ui/overlay.html');
+  assert.match(html, /Content-Security-Policy" content="default-src 'none'; script-src 'self'/);
+  assert.doesNotMatch(html, /https?:\/\//, 'overlay page loads nothing remote');
+});
+
+test('update check: off by default, GitHub releases API only, no cookies', () => {
+  const up = code('updater.js');
+  assert.ok(up.includes("const API_URL = 'https://api.github.com/repos/thangldw/facebook-messenger/releases/latest';"));
+  const fetches = up.match(/net\.fetch\(([^,]+),/g) || [];
+  assert.deepStrictEqual(fetches, ['net.fetch(API_URL,']);
+  assert.match(up, /credentials: 'omit'/);
+  assert.match(up, /async autoCheck\(\) \{\s*if \(!this\.settings\.get\('checkForUpdates'\)\) return;/);
+  assert.strictEqual(require('../src/settings').SCHEMA.checkForUpdates.default, false);
+});
+
+test('notifications are withheld while paused or locked', () => {
+  assert.match(main, /permission === 'notifications' \? notificationsAllowed\(\) : true/);
+  assert.match(main, /function notificationsAllowed\(\) \{\s*return !dnd\.isPaused\(\) && !\(lock && lock\.locked\);/);
+});
+
+test('while locked, DevTools and "open in browser" are disabled', () => {
+  assert.match(main, /role: 'toggleDevTools', enabled: !locked/);
+  assert.match(main, /label: 'Open current page in browser', enabled: !locked/);
+});
 
 test('the only thing injected into the page is CSS', () => {
   assert.match(main, /\binsertCSS\(/);
@@ -62,7 +108,7 @@ test('every window is guarded and <webview> is blocked', () => {
 test('permissions and screen capture are limited to Facebook origins', () => {
   assert.match(main, /setPermissionRequestHandler\([^]*?isFacebookUrl\(details\.requestingUrl\)/);
   assert.match(main, /setPermissionCheckHandler\([^]*?isFacebookUrl\(requestingOrigin\)/);
-  const share = sources.find((s) => s.file === 'screen-share.js').code;
+  const share = code('screen-share.js');
   assert.match(share, /isFacebookUrl\(request\.securityOrigin\)/);
 });
 

@@ -1,9 +1,10 @@
 name: Release
 
-# Push a tag like v0.1.0 (matching package.json "version") to build installers
+# Push a tag like v0.2.0 (matching package.json "version") to build installers
 # on native runners and publish them as a GitHub Release with SHA256SUMS.txt
-# and build provenance attestations. After publishing, the install scripts are
-# run against the real release on macOS and Windows.
+# and build provenance attestations. After publishing, the Homebrew cask is
+# updated, and every install path (install.sh, install.ps1 on x64 and ARM,
+# brew, apt) is exercised against the real release.
 # Manual runs build and smoke-test the installers as workflow artifacts only.
 on:
   push:
@@ -20,18 +21,20 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            target: --mac
+            build: npx electron-builder --mac --publish never
             files: |
               dist/*.dmg
               dist/*.zip
           - os: windows-latest
-            target: --win
+            build: npx electron-builder --win --x64 --publish never && npx electron-builder --win --arm64 --publish never
             files: |
               dist/*.exe
               dist/*.zip
           - os: ubuntu-latest
-            target: --linux
-            files: dist/*.AppImage
+            build: npx electron-builder --linux --publish never
+            files: |
+              dist/*.AppImage
+              dist/*.deb
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -54,7 +57,9 @@ jobs:
           node-version: 22
       - run: npm ci
       - run: npm test
-      - run: npx electron-builder ${{ matrix.target }} --publish never
+      - name: Build
+        shell: bash
+        run: ${{ matrix.build }}
 
       - name: Smoke-test install.sh with the built zip
         if: runner.os == 'macOS'
@@ -77,6 +82,38 @@ jobs:
           .\install.ps1
           if (-not (Test-Path (Join-Path $env:MESSENGER_LITE_DIR 'Messenger Lite.exe'))) { throw 'exe missing after install' }
           if (-not (Test-Path (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Messenger Lite.lnk'))) { throw 'Start menu shortcut missing' }
+
+      - name: Check the ARM64 build really is ARM64
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [IO.Compression.ZipFile]::OpenRead((Get-ChildItem dist\*-win-arm64.zip).FullName)
+          $s = $zip.GetEntry('Messenger Lite.exe').Open(); $b = New-Object byte[] 4096; [void]$s.Read($b, 0, 4096); $s.Close(); $zip.Dispose()
+          $pe = [BitConverter]::ToInt32($b, 0x3c); $machine = [BitConverter]::ToUInt16($b, $pe + 4)
+          if ($machine -ne 0xAA64) { throw ('ARM64 build has machine type 0x{0:X}' -f $machine) }
+
+      - name: Generate and validate winget manifests
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $version = node -p "require('./package.json').version"
+          Get-ChildItem dist\*-setup.exe | ForEach-Object { "{0}  {1}" -f (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower(), $_.Name } | Set-Content -Encoding ascii setup-sums.txt
+          node scripts/packaging.js winget $version setup-sums.txt winget-out
+          if (Get-Command winget -ErrorAction SilentlyContinue) {
+            winget validate --manifest "winget-out\manifests\t\ThangLDW\MessengerLite\$version"
+            if ($LASTEXITCODE -ne 0) { throw 'winget validate failed' }
+          } else { Write-Warning 'winget is not available on this runner; manifests not validated' }
+          Compress-Archive -Path winget-out\manifests -DestinationPath "dist\MessengerLite-$version-winget-manifests.zip"
+
+      - name: Smoke-test the .deb (install, run, remove)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ./dist/*.deb xvfb
+          test -x "/opt/Messenger Lite/messenger-lite"
+          timeout 20 xvfb-run -a "/opt/Messenger Lite/messenger-lite" --no-sandbox --disable-gpu || [ $? -eq 124 ]
+          sudo apt-get remove -y -qq messenger-lite
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -107,6 +144,7 @@ jobs:
             dist/*.zip
             dist/*.exe
             dist/*.AppImage
+            dist/*.deb
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -116,12 +154,53 @@ jobs:
             --title "Messenger Lite $GITHUB_REF_NAME" \
             --generate-notes
 
-  verify-release:
+  # Points the Homebrew cask at the new release (the repo doubles as the tap).
+  homebrew:
     needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: main
+      - name: Update Casks/messenger-lite.rb
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS.txt --dir "$RUNNER_TEMP"
+          node scripts/packaging.js cask "${GITHUB_REF_NAME#v}" "$RUNNER_TEMP/SHA256SUMS.txt"
+          if git diff --quiet; then echo "Cask already up to date"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Homebrew cask: $GITHUB_REF_NAME"
+          git push origin HEAD:main
+
+  # Optional: submit the winget manifests to microsoft/winget-pkgs. Needs a
+  # repository secret WINGET_TOKEN (a GitHub token with public_repo scope).
+  winget:
+    needs: release
+    runs-on: windows-latest
+    steps:
+      - name: Submit to winget-pkgs
+        shell: powershell
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if (-not $env:WINGET_TOKEN) { Write-Host 'WINGET_TOKEN not set; skipping winget submission.'; exit 0 }
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          gh release download $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --pattern '*-winget-manifests.zip' --dir dl
+          Expand-Archive dl\*.zip -DestinationPath wm
+          Invoke-WebRequest -UseBasicParsing https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+          .\wingetcreate.exe submit --token $env:WINGET_TOKEN "wm\manifests\t\ThangLDW\MessengerLite\$version"
+
+  verify-release:
+    needs: [release, homebrew]
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [macos-latest, windows-latest, windows-11-arm, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -143,6 +222,16 @@ jobs:
         run: |
           gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern '*-mac-arm64.zip' --dir "$RUNNER_TEMP/dl"
           gh attestation verify "$RUNNER_TEMP"/dl/*-mac-arm64.zip --repo "$GITHUB_REPOSITORY"
+      - name: Install with Homebrew from the tap
+        if: runner.os == 'macOS'
+        run: |
+          brew tap thangldw/messenger-lite "https://github.com/$GITHUB_REPOSITORY"
+          brew install --cask messenger-lite
+          app="/Applications/Messenger Lite.app"
+          test "$(defaults read "$app/Contents/Info.plist" CFBundleShortVersionString)" = "${GITHUB_REF_NAME#v}"
+          codesign --verify --deep --strict "$app"
+          if xattr "$app" | grep -q com.apple.quarantine; then echo "::error::quarantine flag left on app"; exit 1; fi
+          brew uninstall --cask messenger-lite
       - name: Install from the published release (Windows PowerShell 5.1)
         if: runner.os == 'Windows'
         shell: powershell
@@ -152,4 +241,20 @@ jobs:
         run: |
           $env:MESSENGER_LITE_DIR = Join-Path $env:RUNNER_TEMP 'apps\Messenger Lite'
           .\install.ps1
-          if (-not (Test-Path (Join-Path $env:MESSENGER_LITE_DIR 'Messenger Lite.exe'))) { throw 'exe missing after install' }
+          $exe = Join-Path $env:MESSENGER_LITE_DIR 'Messenger Lite.exe'
+          if (-not (Test-Path $exe)) { throw 'exe missing after install' }
+          # On the ARM runner the installer must have picked the native ARM64 build.
+          $fs = [IO.File]::OpenRead($exe); $b = New-Object byte[] 4096; [void]$fs.Read($b, 0, 4096); $fs.Close()
+          $pe = [BitConverter]::ToInt32($b, 0x3c)
+          $machine = [BitConverter]::ToUInt16($b, $pe + 4)
+          $expected = if ($env:RUNNER_ARCH -eq 'ARM64') { 0xAA64 } else { 0x8664 }
+          if ($machine -ne $expected) { throw ('Installed exe has machine type 0x{0:X}, expected 0x{1:X}' -f $machine, $expected) }
+      - name: Install the .deb from the published release
+        if: runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern '*.deb' --dir "$RUNNER_TEMP/dl"
+          (cd "$RUNNER_TEMP/dl" && gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS.txt && sha256sum -c --ignore-missing SHA256SUMS.txt)
+          sudo apt-get install -y -qq "$RUNNER_TEMP"/dl/*.deb
+          test -x "/opt/Messenger Lite/messenger-lite"

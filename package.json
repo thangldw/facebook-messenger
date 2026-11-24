@@ -1,8 +1,8 @@
 {
   "name": "messenger-lite",
   "productName": "Messenger Lite",
-  "version": "0.1.2",
-  "description": "Personal desktop wrapper for facebook.com/messages with the News Feed blocked",
+  "version": "0.2.0",
+  "description": "Desktop app for Facebook Messenger with the News Feed blocked",
   "main": "src/main.js",
   "private": true,
   "author": "Thang <thangldw@gmail.com>",
@@ -70,23 +70,13 @@
     },
     "win": {
       "target": [
-        {
-          "target": "zip",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
+        "zip",
+        "nsis"
       ],
       "artifactName": "MessengerLite-${version}-win-${arch}.${ext}"
     },
     "nsis": {
-      "artifactName": "MessengerLite-${version}-win-setup.${ext}"
+      "artifactName": "MessengerLite-${version}-win-${arch}-setup.${ext}"
     },
     "linux": {
       "target": [
@@ -95,10 +85,19 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "category": "Network",
+      "maintainer": "Thang <thangldw@gmail.com>",
+      "synopsis": "Facebook Messenger without the News Feed",
       "artifactName": "MessengerLite-${version}-linux-${arch}.${ext}"
     }
-  }
+  },
+  "homepage": "https://github.com/thangldw/facebook-messenger"
 }

@@ -12,14 +12,23 @@ It wraps Facebook's own web client at `facebook.com/messages` (messenger.com was
 - **Photos and files** open in the app's photo viewer; attachments download to a folder you choose (Downloads by default).
 - **Voice and video calls**, including the call window, which stays in-app so it shares your login.
 - **Screen sharing** in calls: the native picker on macOS 15+, and a source chooser on Windows, Linux and older macOS. On Windows it can also share system audio.
-- **Native notifications** and an unread count (dock badge on macOS and on Linux launchers that support it; the window title everywhere).
-- Persistent login in an isolated session, remembered window size, single instance, spellcheck (macOS).
-- **View → Hide Facebook top bar** to remove the global Facebook header (on by default).
-- `Ctrl/Cmd + Shift + M` returns to the inbox from anywhere.
+- **Native notifications** and an unread count: menu bar/tray icon, dock badge (macOS), taskbar badge (Windows), window title.
+- **Runs in the background.** Closing the window keeps it in the menu bar (macOS) or system tray (Windows, Linux) so you still get notifications. Optional **Open at login**.
+- **Pause notifications** for an hour, until tomorrow morning, or until you resume (*Notifications* menu or tray).
+- **Global shortcut** to show or hide the app from anywhere: `⌃⌥M` on macOS, `Ctrl+Alt+Shift+M` on Windows/Linux.
+- **App lock** with a password (and Touch ID on macOS). Locks on launch, when the computer locks or sleeps, and after 1–60 minutes of inactivity. Notification previews are withheld while locked.
+- **Privacy screen**: blur the app whenever it is not the active window (useful when screen sharing or in public).
+- **Private mode**: nothing is written to disk; you are logged out whenever you quit.
+- **Reopens your last conversation** on launch (only its address is remembered).
+- **Recovers by itself**: reconnects when the network comes back, and reloads after a crash or hang.
+- **Hide Facebook top bar**, persistent isolated login, remembered window size, single instance, spellcheck (macOS).
+- `Ctrl/Cmd + Shift + M` returns to the inbox; `Ctrl/Cmd + Shift + L` locks the app.
+
+All options are under the **Settings** menu.
 
 ## Privacy
 
-**The app never sees, stores or sends your Facebook username or password.** You sign in on Facebook's own page, which sends them straight to Facebook. The app keeps only an encrypted session cookie on your computer and sends nothing anywhere itself. [PRIVACY.md](PRIVACY.md) explains why, and how to verify every claim yourself.
+**The app never sees, stores or sends your Facebook username or password.** You sign in on Facebook's own page, which sends them straight to Facebook. The app keeps only an encrypted session cookie on your computer and sends nothing anywhere itself, except an optional, off-by-default check for new versions. [PRIVACY.md](PRIVACY.md) explains why, and how to verify every claim yourself.
 
 ## Install
 
@@ -33,15 +42,24 @@ curl -fsSL https://raw.githubusercontent.com/thangldw/facebook-messenger/main/in
 
 Installs to `~/Applications/Messenger Lite.app`.
 
-**Windows 10/11**, in PowerShell (no admin needed, no installer `.exe`):
+Or with **Homebrew**:
+
+```bash
+brew tap thangldw/messenger-lite https://github.com/thangldw/facebook-messenger
+brew install --cask messenger-lite        # update later: brew upgrade --cask messenger-lite
+```
+
+**Windows 10/11** (x64 and ARM), in PowerShell (no admin needed, no installer `.exe`):
 
 ```powershell
 irm https://raw.githubusercontent.com/thangldw/facebook-messenger/main/install.ps1 | iex
 ```
 
-Installs to `%LOCALAPPDATA%\Programs\Messenger Lite` and adds a Start menu shortcut.
+Installs to `%LOCALAPPDATA%\Programs\Messenger Lite` and adds a Start menu shortcut. Once the package is accepted into the winget repository you can also use `winget install ThangLDW.MessengerLite`.
 
-Both scripts are short; read [install.sh](install.sh) / [install.ps1](install.ps1) before running them if you like.
+**Linux** (Debian/Ubuntu), download the `.deb` from the [latest release](https://github.com/thangldw/facebook-messenger/releases/latest) and run `sudo apt install ./MessengerLite-<ver>-linux-amd64.deb`; other distributions can use the AppImage.
+
+The scripts are short; read [install.sh](install.sh) / [install.ps1](install.ps1) before running them if you like.
 
 ### Manual download
 
@@ -51,8 +69,8 @@ Or download a file from the [latest release](https://github.com/thangldw/faceboo
 |---|---|
 | macOS (Apple Silicon) | `MessengerLite-<ver>-mac-arm64.dmg` or `.zip` |
 | macOS (Intel) | `MessengerLite-<ver>-mac-x64.dmg` or `.zip` |
-| Windows | `MessengerLite-<ver>-win-x64.zip` (unzip, run `Messenger Lite.exe`) or `MessengerLite-<ver>-win-setup.exe` (installer) |
-| Linux | `MessengerLite-<ver>-linux-x86_64.AppImage` (`chmod +x`, then run) |
+| Windows (x64 / ARM) | `MessengerLite-<ver>-win-x64.zip` / `-win-arm64.zip` (unzip, run `Messenger Lite.exe`) or `MessengerLite-<ver>-win-x64-setup.exe` / `-win-arm64-setup.exe` (installer) |
+| Linux | `MessengerLite-<ver>-linux-amd64.deb` or `MessengerLite-<ver>-linux-x86_64.AppImage` (`chmod +x`, then run) |
 
 Files downloaded with a browser are flagged by the OS because the builds are not signed with a paid certificate:
 
@@ -69,8 +87,9 @@ Sign in to Facebook in the app window. If you use end-to-end encrypted chats, Me
 
 Quit the app, then delete:
 
-- **macOS:** `~/Applications/Messenger Lite.app` and `~/Library/Application Support/Messenger Lite`
+- **macOS:** `~/Applications/Messenger Lite.app` and `~/Library/Application Support/Messenger Lite` (Homebrew: `brew uninstall --zap --cask messenger-lite`)
 - **Windows:** `%LOCALAPPDATA%\Programs\Messenger Lite`, `%APPDATA%\Messenger Lite` and the Start menu shortcut (or use *Apps & features* if you used the setup `.exe`)
+- **Linux:** `sudo apt remove messenger-lite` and `~/.config/Messenger Lite`
 
 ### Calls on macOS
 
@@ -84,7 +103,7 @@ Requires Node.js 22 or newer.
 npm install
 npm start          # run from source
 npm test           # route policy and privacy tests
-npm run dist:mac   # or dist:win / dist:linux, output in dist/
+npm run dist:mac   # or dist:win / dist:linux, output in dist/ (Windows: add --x64 or --arm64)
 npm run app:mac    # macOS: just the .app, fastest for local use
 ```
 
@@ -99,18 +118,25 @@ npm version patch          # bumps package.json and creates tag vX.Y.Z
 git push --follow-tags     # CI builds mac/win/linux and publishes the release
 ```
 
-The workflow fails if the tag does not match the `version` in `package.json`. It smoke-tests both install scripts on macOS and Windows runners, publishes the release with `SHA256SUMS.txt` and build attestations, then installs from the published release with the one-line commands to confirm they work. Running it manually from the Actions tab builds and smoke-tests the installers as workflow artifacts without publishing.
+The workflow fails if the tag does not match the `version` in `package.json`. It smoke-tests the installers on each OS, publishes the release with `SHA256SUMS.txt` and build attestations, updates the Homebrew cask in `Casks/`, then installs from the published release every supported way (install.sh, Homebrew, install.ps1 on x64 and on a Windows ARM runner, apt) to confirm they work. Running it manually from the Actions tab builds and smoke-tests the installers as workflow artifacts without publishing.
+
+**winget:** each release includes `MessengerLite-<ver>-winget-manifests.zip`. The first submission to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) is manual (`wingetcreate submit <manifest folder>`); after it is accepted, add a repository secret `WINGET_TOKEN` (a GitHub token with `public_repo` scope) and every later release is submitted automatically.
 
 ## How it works
 
 | File | Purpose |
 |---|---|
-| `src/main.js` | Window, session, permissions, menu, unread badge |
-| `src/routes.js` | Route policy: which URLs stay in-app, bounce to the inbox, or open externally |
+| `src/main.js` | Window, session, permissions, menus, wiring |
+| `src/routes.js` | Route policy: which URLs stay in-app, bounce to the inbox, download, or open externally |
+| `src/settings.js` | Settings, validated against a schema on every read |
+| `src/tray.js`, `src/dnd.js` | Menu bar/tray icon, pause notifications |
+| `src/lock.js`, `src/password.js` | App lock: scrypt password hash, Touch ID, auto-lock |
+| `src/overlay.js`, `src/ui/` | The app's own lock/recovery screen layered over Facebook |
+| `src/recovery.js` | Reconnect after network failures, reload after crashes/hangs |
+| `src/updater.js` | Opt-in update check (GitHub releases API only) |
 | `src/screen-share.js` | Screen-share source picker for `getDisplayMedia()` |
-| `test/routes.test.js` | Route policy tests |
-| `test/privacy.test.js` | Enforces the guarantees in [PRIVACY.md](PRIVACY.md) |
-| `install.sh`, `install.ps1` | One-line installers for macOS and Windows |
+| `test/` | Route, module and privacy tests; `privacy.test.js` enforces [PRIVACY.md](PRIVACY.md) |
+| `install.sh`, `install.ps1`, `Casks/`, `scripts/packaging.js` | Installers and package-manager files |
 
 Security issues: see [SECURITY.md](SECURITY.md).
 
@@ -129,9 +155,10 @@ If a login, security or call step ever gets sent to your browser, add its path p
 ## Known limitations
 
 - Depends on Facebook's web client: if Meta changes it, the top-bar hiding (`div[role="banner"]`) or a route may need updating.
-- Windows shows the unread count in the window title only, not as a taskbar badge.
+- **A Facebook account is required.** Since messenger.com closed, Meta only offers Messenger on desktop through facebook.com, so this app cannot be used with a deactivated Facebook account without reactivating it (signing in to facebook.com reactivates a deactivated account), nor with a Messenger-only account. Meta's mobile Messenger app is the only option for those.
+- On Windows and Linux, clicking a notification may not bring a hidden window to the front; use the tray icon or the global shortcut.
 - Spellcheck is macOS-only: on Windows and Linux Electron would download dictionaries from Google, so it is off to keep traffic Facebook-only.
-- No auto-update; re-run the install command to upgrade.
+- No automatic installs of updates; turn on *Settings → Check for updates automatically* to be told about new versions, then re-run the install command (or `brew upgrade`).
 - Builds are not signed with paid Apple/Microsoft certificates; the install scripts avoid the resulting warnings, browser downloads do not.
 
 ## License

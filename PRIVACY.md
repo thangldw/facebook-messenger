@@ -22,15 +22,17 @@ Everything lives in one folder on your computer and nowhere else:
 | Session cookie (keeps you signed in) | `Partitions/messenger/Cookies` | Yes, **encrypted** with a key in the macOS Keychain, Windows DPAPI or the Linux secret service. |
 | Facebook's cache, local storage, IndexedDB | `Partitions/messenger/…` | Yes, as in a browser. Written by Facebook's web page, not by the app. Can include recent messages Facebook caches for speed. |
 | Files you download | Where you choose (Downloads by default) | Only when you click download on an attachment or photo. Attachments are always saved as files, never opened inside the app. |
-| App settings | `window-state.json`, `prefs.json` | Yes: window size/position and the "hide top bar" toggle. Nothing else. |
+| App settings | `settings.json` | Yes: your choices in the Settings menu and window size/position. Also, unless you turn it off or use private mode, the **address of the last conversation** you opened (e.g. `/messages/t/1234`, no names or content), so it can reopen on launch. |
+| App lock password | `settings.json` | **Only a salted scrypt hash**, never the password itself. The hash cannot be turned back into the password; it can only check a guess, and the app slows down repeated wrong guesses. |
+| Private mode | — | With *Settings → Private mode* on, Facebook's session, cache and storage are kept in memory only and vanish when you quit. Turning it on also deletes what was stored before. |
 
-The app sends **nothing** anywhere itself: no analytics, no crash reports, no update checks. The only network traffic is Facebook's web page talking to Facebook, plus links you choose to open in your browser. Spellcheck uses the macOS spellchecker on macOS; on Windows and Linux it is turned off, because Electron would download dictionaries from Google there.
+The app sends **nothing** anywhere itself: no analytics, no crash reports. The only network traffic is Facebook's web page talking to Facebook, plus links you choose to open in your browser, with one opt-in exception: if you turn on *Settings → Check for updates automatically* (off by default) or click *Check for Updates…*, the app asks `api.github.com` for the latest release of this project (automatically at most once a day). That request carries no cookies and no data about you beyond the app version in its User-Agent and your IP address, which any web request reveals. Spellcheck uses the macOS spellchecker on macOS; on Windows and Linux it is turned off, because Electron would download dictionaries from Google there.
 
 ## Why the app cannot read your password
 
 Your login happens inside Facebook's web page. The app is deliberately built so it has no way into that page:
 
-1. **No code runs inside the page.** The app never calls `executeJavaScript`, has no preload script and no IPC channel to the page. The only thing it injects is a CSS stylesheet (to hide Facebook's top bar), and CSS cannot read form fields or send data.
+1. **No code runs inside the page.** The app never calls `executeJavaScript`, and Facebook's pages have no preload script and no IPC channel to the app. The only thing it injects is CSS (to hide Facebook's top bar and for the privacy-screen blur), and CSS cannot read form fields or send data. The lock and reconnect screens are the app's own local page, shown *on top of* Facebook in a separate view; it is the only page with an IPC channel, which accepts requests from that page alone and only for a fixed list of actions.
 2. **The page is isolated from the app.** It runs with `contextIsolation: true`, `sandbox: true` and `nodeIntegration: false`, so Facebook's page, or anything injected into it, cannot reach the app or your files either.
 3. **The app does not touch cookies or traffic.** It never reads the cookie store and does not inspect, intercept or proxy network requests.
 4. **The binary is hardened.** Builds enable the Electron fuses that encrypt cookies at rest and disable `ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS` and `--inspect`, the usual ways to turn an Electron app into a tool for reading its data. The app only loads its own code from its integrity-checked `app.asar`.
@@ -94,8 +96,13 @@ Use a network monitor such as Little Snitch or LuLu (macOS), or Resource Monitor
 
 ## Removing your data
 
-- **In the app:** Account → **Log out and clear data…** deletes the session cookie, Facebook's cache and storage. You will need to sign in again.
+- **In the app:** Account → **Log out and clear data…** deletes the session cookie, Facebook's cache and storage, and the remembered conversation. You will need to sign in again.
+- **Forgot the app-lock password:** *Forgot password? Log out and reset…* on the lock screen does the same and turns the lock off. There is no other way past the lock.
 - **Completely:** quit the app, then delete the folder from the first table above.
+
+## About the app lock
+
+The lock hides the app's window behind the lock screen, withholds notifications (whose previews would show message text) and disables DevTools until you unlock. It is a privacy screen for a shared or unattended computer, not encryption: Facebook's session stays on disk as described above, so someone with full access to your user account and enough skill could still extract it. Use your operating system's account password and full-disk encryption for that threat.
 
 ## What this app cannot protect against
 

@@ -27,6 +27,14 @@
 
   if ($env:OS -ne 'Windows_NT') { Die 'This installer is for Windows. On macOS use install.sh.' }
   if (-not [Environment]::Is64BitOperatingSystem) { Die 'Messenger Lite needs 64-bit Windows.' }
+  # Native build for Windows on ARM. OSArchitecture reports the real CPU even
+  # when this PowerShell runs under x64 emulation.
+  $arch = 'x64'
+  try {
+    if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { $arch = 'arm64' }
+  } catch {
+    if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') { $arch = 'arm64' }
+  }
 
   $dest = $env:MESSENGER_LITE_DIR
   if (-not $dest) { $dest = Join-Path $env:LOCALAPPDATA "Programs\$AppName" }
@@ -48,11 +56,11 @@
       }
       # The tag becomes part of a file path and URL; accept only vX.Y.Z.
       if ($tag -notmatch '^v\d+\.\d+\.\d+$') { Die "Invalid version tag: $tag" }
-      $asset = "MessengerLite-$($tag.TrimStart('v'))-win-x64.zip"
+      $asset = "MessengerLite-$($tag.TrimStart('v'))-win-$arch.zip"
       $base = "https://github.com/$Repo/releases/download/$tag"
       $zip = Join-Path $tmp $asset
 
-      Say "Downloading $AppName $tag"
+      Say "Downloading $AppName $tag ($arch)"
       Invoke-WebRequest -UseBasicParsing -Uri "$base/$asset" -OutFile $zip
       $sums = (Invoke-WebRequest -UseBasicParsing -Uri "$base/SHA256SUMS.txt").Content
       if ($sums -is [byte[]]) { $sums = [Text.Encoding]::UTF8.GetString($sums) }
