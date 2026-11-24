@@ -73,7 +73,7 @@ sqlite3 "file:$HOME/Library/Application Support/Messenger Lite/Partitions/messen
   "select sum(length(encrypted_value)>0) as encrypted, sum(length(value)>0) as plaintext from cookies where host_key like '%facebook.com'"
 ```
 
-Expect `plaintext` to be `0` (or empty) once the app has run. You can also confirm the fuses on the installed app:
+On a fresh install, expect `plaintext` to be `0` (or empty). If you signed in with a build from before v0.1.0, cookies are encrypted as Facebook rewrites them; the login cookies (`c_user`, `xs`) are rewritten on the first launch, and Account → **Log out and clear data…** followed by signing in again encrypts all of them at once. You can also confirm the fuses on the installed app:
 
 ```bash
 npx @electron/fuses read --app "$HOME/Applications/Messenger Lite.app"
