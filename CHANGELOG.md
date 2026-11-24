@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.1
 
 - Security: the app lock now also hides call windows and other popups, and no new window opens while locked. Before, a call window stayed visible and usable above the lock.
 - Security: a popup opened by a non-Facebook frame embedded in a page (which could write a fake login page into a window with no address bar) is closed before it is shown.
