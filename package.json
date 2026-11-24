@@ -1,7 +1,7 @@
 {
   "name": "messenger-lite",
   "productName": "Messenger Lite",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Personal desktop wrapper for facebook.com/messages with the News Feed blocked",
   "main": "src/main.js",
   "private": true,
