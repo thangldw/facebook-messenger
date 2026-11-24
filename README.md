@@ -23,6 +23,7 @@ It wraps Facebook's own web client at `facebook.com/messages` (messenger.com was
 - **Privacy screen**: blur the app whenever it is not the active window (useful when screen sharing or in public).
 - **Private mode**: nothing is written to disk; you are logged out whenever you quit.
 - **Reopens your last conversation** on launch (only its address is remembered).
+- **Updates itself** (since v0.4.0): *Check for Updates…* in the app menu (or turn on automatic checks in *Settings*), then **Update now**. Thrum downloads the new version from this project's GitHub releases, checks its SHA-256 checksum, and swaps it in when it restarts, keeping the old version until the new one is in place. Your logins and settings stay. Copies installed with Homebrew or the `.deb` are updated with `brew upgrade` / `apt` instead.
 - **Recovers by itself**: reconnects when the network comes back, and reloads after a crash or hang.
 - **Hide Facebook top bar**, persistent isolated login, remembered window size, single instance, spellcheck (macOS).
 - `Ctrl/Cmd + Shift + M` returns to the inbox; `Ctrl/Cmd + Shift + L` locks the app.
@@ -138,7 +139,8 @@ The workflow fails if the tag does not match the `version` in `package.json`. It
 | `src/lock.js`, `src/password.js` | App lock: scrypt password hash, Touch ID, auto-lock |
 | `src/overlay.js`, `src/settings-window.js`, `src/ui/` | The app's own pages: lock/recovery screen, settings window |
 | `src/recovery.js` | Reconnect after network failures, reload after crashes/hangs |
-| `src/updater.js` | Opt-in update check (GitHub releases API only) |
+| `src/updater.js` | Opt-in update check and verified release downloads (GitHub only) |
+| `src/self-update.js` | Installs a downloaded update: install detection, unpack and check, swap helper |
 | `src/screen-share.js` | Screen-share source picker for `getDisplayMedia()` |
 | `test/` | Route, module and privacy tests; `privacy.test.js` enforces [PRIVACY.md](PRIVACY.md) |
 | `install.sh`, `install.ps1`, `Casks/`, `scripts/packaging.js` | Installers and package-manager files |
@@ -164,7 +166,7 @@ If a login, security or call step ever gets sent to your browser, add its path p
 - On Windows and Linux, clicking a notification may not bring a hidden window to the front; use the tray icon or the global shortcut.
 - With several accounts, notifications do not say which account they belong to, and clicking one does not switch accounts: the app does not read Facebook's pages, so it cannot see the account name. The tray and *Accounts* menu show unread counts per account.
 - Spellcheck is macOS-only: on Windows and Linux Electron would download dictionaries from Google, so it is off to keep traffic Facebook-only.
-- No automatic installs of updates; turn on *Settings → Check for updates automatically* to be told about new versions, then re-run the install command (or `brew upgrade --cask thangldw/thrum/thrum`).
+- Updates never install without you: the automatic check (off by default) only tells you, and you choose **Update now**. Homebrew and `.deb` installs update through their package manager. On macOS, the Keychain may ask again for "Thrum Safe Storage" after an update (choose **Always Allow**), because builds are not signed with a paid certificate.
 - Builds are not signed with paid Apple/Microsoft certificates; the install scripts avoid the resulting warnings, browser downloads do not.
 
 ## License

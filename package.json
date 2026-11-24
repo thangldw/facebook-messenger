@@ -1,7 +1,7 @@
 {
   "name": "thrum",
   "productName": "Thrum",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Desktop app for Facebook Messenger with the News Feed blocked",
   "main": "src/main.js",
   "private": true,
