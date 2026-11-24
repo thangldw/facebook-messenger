@@ -146,6 +146,23 @@ test('every window is guarded and <webview> is blocked', () => {
   assert.match(main, /setWindowOpenHandler/);
 });
 
+test('popups: shown only after their opener is checked, hidden while locked', () => {
+  // A popup starts as about:blank and its opener can write anything into it.
+  assert.match(main, /overrideBrowserWindowOptions: \{\s*show: false,/);
+  assert.match(main, /wc\.on\('did-create-window'[^]*?if \(opener && !isFacebookUrl\(opener\.origin\)\) \{ win\.destroy\(\); return; \}/);
+  // The lock covers popups: nothing opens while locked, open ones are hidden.
+  assert.match(main, /setWindowOpenHandler\(\(\{ url \}\) => \{\s*if \(lock && lock\.locked\) return \{ action: 'deny' \};/);
+  const vis = main.slice(main.indexOf('function applyVisibility('), main.indexOf('function switchAccount('));
+  assert.match(vis, /for \(const win of popups\)[^]*?win\.hide\(\)/);
+  assert.match(main, /win\.on\('show', \(\) => \{ if \(lock && lock\.locked\)/);
+});
+
+test('release builds do not fetch packages from npm on the fly', () => {
+  const wf = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'release.yml'), 'utf8');
+  assert.doesNotMatch(wf, /npx (--yes|-y)\b/);
+  assert.strictEqual(pkg.devDependencies['@electron/fuses'], '1.8.0');
+});
+
 test('permissions and screen capture are limited to Facebook origins', () => {
   assert.match(main, /setPermissionRequestHandler\([^]*?isFacebookUrl\(details\.requestingUrl\)/);
   assert.match(main, /setPermissionCheckHandler\([^]*?isFacebookUrl\(requestingOrigin\)/);
