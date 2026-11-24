@@ -1,0 +1,60 @@
+{
+  "name": "messenger-lite",
+  "productName": "Messenger Lite",
+  "version": "0.1.0",
+  "description": "Personal desktop wrapper for facebook.com/messages with the News Feed blocked",
+  "main": "src/main.js",
+  "private": true,
+  "author": "Thang <thangldw@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thangldw/facebook-messenger.git"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "app:mac": "electron-builder --mac dir",
+    "dist": "electron-builder --publish never",
+    "dist:mac": "electron-builder --mac --publish never",
+    "dist:win": "electron-builder --win --publish never",
+    "dist:linux": "electron-builder --linux --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.4.1",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "local.personal.messenger-lite",
+    "files": ["src/**/*", "package.json"],
+    "directories": { "buildResources": "build" },
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }],
+      "category": "public.app-category.social-networking",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "artifactName": "MessengerLite-${version}-mac-${arch}.${ext}",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Messenger calls need the microphone.",
+        "NSCameraUsageDescription": "Messenger video calls need the camera."
+      }
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "artifactName": "MessengerLite-${version}-win-setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "MessengerLite-${version}-win-portable.${ext}"
+    },
+    "linux": {
+      "target": [{ "target": "AppImage", "arch": ["x64"] }],
+      "category": "Network",
+      "artifactName": "MessengerLite-${version}-linux-${arch}.${ext}"
+    }
+  }
+}

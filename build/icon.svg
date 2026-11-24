@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4338CA"/>
+      <stop offset="1" stop-color="#0D9488"/>
+    </linearGradient>
+  </defs>
+  <!-- macOS-style safe area: 824px tile centered in 1024 -->
+  <rect x="100" y="100" width="824" height="824" rx="184" fill="url(#bg)"/>
+  <path d="M300 300h424a72 72 0 0 1 72 72v232a72 72 0 0 1-72 72H460l-118 96a10 10 0 0 1-16-8v-88h-26a72 72 0 0 1-72-72V372a72 72 0 0 1 72-72z" fill="#fff"/>
+  <circle cx="392" cy="488" r="40" fill="#4338CA"/>
+  <circle cx="512" cy="488" r="40" fill="#3B5FB4"/>
+  <circle cx="632" cy="488" r="40" fill="#0D9488"/>
+</svg>
