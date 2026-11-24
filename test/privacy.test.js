@@ -196,6 +196,25 @@ test('external links only open http(s) in the browser', () => {
   for (const line of calls) assert.ok(line.includes('/^https?:'), `unguarded: ${line.trim()}`);
 });
 
+test('microphone and camera: automatic only in a call window, otherwise the user is asked', () => {
+  assert.match(main, /if \(permission !== 'media'\) \{ cb\(true\); return; \}\s*allowMedia\(wc, partition, details\)/);
+  const fn = main.slice(main.indexOf('async function allowMedia('), main.indexOf('async function clearPartition('));
+  assert.match(fn, /^async function allowMedia\(wc, partition, details\) \{\s*if \(isCallWindow\(wc\)\) return true;\s*if \(lock && lock\.locked\) return false;/);
+  assert.match(fn, /dialog\.showMessageBox/);
+  assert.match(main, /function isCallWindow\(wc\) \{\s*return \[\.\.\.popups\]\.some\(\(win\) => !win\.isDestroyed\(\) && win\.webContents === wc\) && isCallUrl\(wc\.getURL\(\)\);/);
+});
+
+test('macOS builds use the hardened runtime with only the entitlements calls need', () => {
+  const mac = pkg.build.mac;
+  assert.strictEqual(mac.hardenedRuntime, true);
+  const plist = fs.readFileSync(path.join(__dirname, '..', mac.entitlements), 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+  const keys = [...plist.matchAll(/<key>([^<]+)<\/key>/g)].map((m) => m[1]).sort();
+  assert.deepStrictEqual(keys, [
+    'com.apple.security.cs.allow-jit', 'com.apple.security.device.audio-input', 'com.apple.security.device.camera',
+  ]);
+  assert.strictEqual(mac.entitlementsInherit, mac.entitlements);
+});
+
 test('permissions are an explicit allow-list', () => {
   const m = main.match(/const allowed = new Set\(\[([^\]]*)\]\)/);
   assert.ok(m, 'permission allow-list not found');

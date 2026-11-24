@@ -6,7 +6,7 @@ const {
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { classify, isFacebookUrl, downloadTarget, HOME_URL } = require('./routes');
+const { classify, isFacebookUrl, isCallUrl, downloadTarget, HOME_URL } = require('./routes');
 const { handleDisplayMediaRequest } = require('./screen-share');
 const { Settings, isChatPath, cleanName, LOCK_MINUTES, MAX_ACCOUNTS } = require('./settings');
 const { AccountView, partitionFor } = require('./account-view');
@@ -322,8 +322,11 @@ function configureSession(partition) {
   // Granted only to Facebook's own frames, never to embedded third-party iframes.
   // Notifications are additionally withheld while paused (Do Not Disturb) or locked.
   const allowed = new Set(['notifications', 'media', 'display-capture', 'clipboard-sanitized-write', 'fullscreen']);
-  ses.setPermissionRequestHandler((_wc, permission, cb, details) => {
-    cb(allowed.has(permission) && isFacebookUrl(details.requestingUrl));
+  // Microphone and camera additionally need a call window or the user's OK (allowMedia).
+  ses.setPermissionRequestHandler((wc, permission, cb, details) => {
+    if (!allowed.has(permission) || !isFacebookUrl(details.requestingUrl)) { cb(false); return; }
+    if (permission !== 'media') { cb(true); return; }
+    allowMedia(wc, partition, details).then(cb, () => cb(false));
   });
   ses.setPermissionCheckHandler((_wc, permission, requestingOrigin) => {
     if (!allowed.has(permission) || !isFacebookUrl(requestingOrigin)) return false;
@@ -345,9 +348,47 @@ function configureSession(partition) {
   });
 }
 
+// Microphone and camera: granted without asking only to a call window (a
+// popup on a Facebook call page). Anywhere else, e.g. a voice clip recorded in a
+// chat, the user is asked first, as in a browser. Answers can be remembered per
+// account and device until Thrum quits. Nothing new is granted while locked.
+const mediaChoices = new Map(); // "<partition> audio|video" -> boolean
+
+function isCallWindow(wc) {
+  return [...popups].some((win) => !win.isDestroyed() && win.webContents === wc) && isCallUrl(wc.getURL());
+}
+
+async function allowMedia(wc, partition, details) {
+  if (isCallWindow(wc)) return true;
+  if (lock && lock.locked) return false;
+  let types = (details.mediaTypes || []).filter((t) => t === 'audio' || t === 'video');
+  if (types.length === 0) types = ['audio', 'video'];
+  const keys = types.map((t) => `${partition} ${t}`);
+  if (keys.some((k) => mediaChoices.get(k) === false)) return false;
+  if (keys.every((k) => mediaChoices.get(k) === true)) return true;
+
+  const what = types.length === 2 ? 'your microphone and camera' : types[0] === 'video' ? 'your camera' : 'your microphone';
+  const acc = accountFor(wc);
+  const options = {
+    type: 'question',
+    message: `Allow Facebook to use ${what}?`,
+    detail: `${acc && accounts.size > 1 ? `Account "${acc.name}". ` : ''}Calls that open in their own window can always use them; this request comes from ${new URL(details.requestingUrl).hostname}.`,
+    buttons: ['Allow', "Don't Allow"],
+    defaultId: 1,
+    cancelId: 1,
+    checkboxLabel: 'Remember until Thrum quits',
+  };
+  const parent = confirmParent();
+  const { response, checkboxChecked } = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options);
+  const ok = response === 0;
+  if (checkboxChecked) for (const k of keys) mediaChoices.set(k, ok);
+  return ok;
+}
+
 // Deletes everything the app keeps for an account: cookies (the login session),
 // local/IndexedDB storage, service workers and HTTP cache.
 async function clearPartition(partition) {
+  for (const k of mediaChoices.keys()) if (k.startsWith(`${partition} `)) mediaChoices.delete(k);
   const ses = session.fromPartition(partition);
   await ses.clearStorageData();
   await ses.clearCache();
