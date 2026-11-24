@@ -1,8 +1,10 @@
 name: Release
 
 # Push a tag like v0.1.0 (matching package.json "version") to build installers
-# on native runners and publish them as a GitHub Release.
-# Manual runs build the installers and keep them as workflow artifacts only.
+# on native runners and publish them as a GitHub Release with SHA256SUMS.txt
+# and build provenance attestations. After publishing, the install scripts are
+# run against the real release on macOS and Windows.
+# Manual runs build and smoke-test the installers as workflow artifacts only.
 on:
   push:
     tags: ["v*"]
@@ -19,10 +21,14 @@ jobs:
         include:
           - os: macos-latest
             target: --mac
-            files: dist/*.dmg
+            files: |
+              dist/*.dmg
+              dist/*.zip
           - os: windows-latest
             target: --win
-            files: dist/*.exe
+            files: |
+              dist/*.exe
+              dist/*.zip
           - os: ubuntu-latest
             target: --linux
             files: dist/*.AppImage
@@ -48,6 +54,28 @@ jobs:
       - run: npm test
       - run: npx electron-builder ${{ matrix.target }} --publish never
 
+      - name: Smoke-test install.sh with the built zip
+        if: runner.os == 'macOS'
+        run: |
+          zip=$(ls dist/*-mac-arm64.zip)
+          MESSENGER_LITE_ZIP="$zip" MESSENGER_LITE_DIR="$RUNNER_TEMP/apps" MESSENGER_LITE_NO_OPEN=1 ./install.sh
+          app="$RUNNER_TEMP/apps/Messenger Lite.app"
+          codesign --verify --deep --strict "$app"
+          npx --yes @electron/fuses read --app "$app" | tee fuses.txt
+          grep -q "EnableCookieEncryption is Enabled" fuses.txt
+          grep -q "RunAsNode is Disabled" fuses.txt
+
+      - name: Smoke-test install.ps1 with the built zip (Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $env:MESSENGER_LITE_ZIP = (Get-ChildItem dist\*-win-x64.zip).FullName
+          $env:MESSENGER_LITE_DIR = Join-Path $env:RUNNER_TEMP 'apps\Messenger Lite'
+          $env:MESSENGER_LITE_NO_OPEN = '1'
+          .\install.ps1
+          if (-not (Test-Path (Join-Path $env:MESSENGER_LITE_DIR 'Messenger Lite.exe'))) { throw 'exe missing after install' }
+          if (-not (Test-Path (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Messenger Lite.lnk'))) { throw 'Start menu shortcut missing' }
+
       - uses: actions/upload-artifact@v4
         with:
           name: installers-${{ matrix.os }}
@@ -60,11 +88,23 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
+      - name: Write SHA256SUMS.txt
+        working-directory: dist
+        run: sha256sum * | tee SHA256SUMS.txt
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.exe
+            dist/*.AppImage
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -73,3 +113,39 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "Messenger Lite $GITHUB_REF_NAME" \
             --generate-notes
+
+  verify-release:
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install from the published release (macOS)
+        if: runner.os == 'macOS'
+        env:
+          MESSENGER_LITE_VERSION: ${{ github.ref_name }}
+          MESSENGER_LITE_DIR: ${{ runner.temp }}/apps
+          MESSENGER_LITE_NO_OPEN: "1"
+        run: |
+          ./install.sh
+          codesign --verify --deep --strict "$MESSENGER_LITE_DIR/Messenger Lite.app"
+      - name: Verify build provenance of a release asset
+        if: runner.os == 'macOS'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern '*-mac-arm64.zip' --dir "$RUNNER_TEMP/dl"
+          gh attestation verify "$RUNNER_TEMP"/dl/*-mac-arm64.zip --repo "$GITHUB_REPOSITORY"
+      - name: Install from the published release (Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        shell: powershell
+        env:
+          MESSENGER_LITE_VERSION: ${{ github.ref_name }}
+          MESSENGER_LITE_NO_OPEN: "1"
+        run: |
+          $env:MESSENGER_LITE_DIR = Join-Path $env:RUNNER_TEMP 'apps\Messenger Lite'
+          .\install.ps1
+          if (-not (Test-Path (Join-Path $env:MESSENGER_LITE_DIR 'Messenger Lite.exe'))) { throw 'exe missing after install' }

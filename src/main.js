@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, Menu, shell, session } = require('electron');
+const { app, BrowserWindow, Menu, shell, session, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { classify, HOME_URL } = require('./routes');
@@ -114,6 +114,28 @@ function configureSession() {
   ses.setDisplayMediaRequestHandler(handleDisplayMediaRequest, { useSystemPicker: true });
 }
 
+// Deletes everything the app keeps for Facebook: cookies (the login session),
+// local/IndexedDB storage, service workers and HTTP cache.
+async function logOutAndClearData() {
+  const options = {
+    type: 'warning',
+    message: 'Log out and delete all local data?',
+    detail: 'This removes your Facebook session, cached messages and settings stored by Facebook in this app. You will need to sign in again.',
+    buttons: ['Log out and clear', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+  };
+  const { response } = mainWindow
+    ? await dialog.showMessageBox(mainWindow, options)
+    : await dialog.showMessageBox(options);
+  if (response !== 0) return;
+  const ses = session.fromPartition(PARTITION);
+  await ses.clearStorageData();
+  await ses.clearCache();
+  await ses.clearAuthCache();
+  mainWindow?.loadURL(HOME_URL);
+}
+
 function buildMenu() {
   const template = [
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
@@ -143,6 +165,10 @@ function buildMenu() {
         { role: 'togglefullscreen' },
         { role: 'toggleDevTools' },
       ],
+    },
+    {
+      label: 'Account',
+      submenu: [{ label: 'Log out and clear data…', click: () => logOutAndClearData() }],
     },
     { role: 'windowMenu' },
   ];

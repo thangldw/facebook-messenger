@@ -28,8 +28,20 @@
     "appId": "local.personal.messenger-lite",
     "files": ["src/**/*", "package.json"],
     "directories": { "buildResources": "build" },
+    "electronFuses": {
+      "enableCookieEncryption": true,
+      "runAsNode": false,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "grantFileProtocolExtraPrivileges": false
+    },
     "mac": {
-      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }],
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] },
+        { "target": "zip", "arch": ["arm64", "x64"] }
+      ],
       "category": "public.app-category.social-networking",
       "identity": "-",
       "hardenedRuntime": false,
@@ -41,15 +53,13 @@
     },
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
-      ]
+        { "target": "zip", "arch": ["x64"] },
+        { "target": "nsis", "arch": ["x64"] }
+      ],
+      "artifactName": "MessengerLite-${version}-win-${arch}.${ext}"
     },
     "nsis": {
       "artifactName": "MessengerLite-${version}-win-setup.${ext}"
-    },
-    "portable": {
-      "artifactName": "MessengerLite-${version}-win-portable.${ext}"
     },
     "linux": {
       "target": [{ "target": "AppImage", "arch": ["x64"] }],
