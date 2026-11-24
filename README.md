@@ -47,7 +47,8 @@ Or with **Homebrew**:
 
 ```bash
 brew tap thangldw/messenger-lite https://github.com/thangldw/facebook-messenger
-brew install --cask messenger-lite        # update later: brew upgrade --cask messenger-lite
+brew install --cask thangldw/messenger-lite/messenger-lite
+# update later: brew upgrade --cask thangldw/messenger-lite/messenger-lite
 ```
 
 **Windows 10/11** (x64 and ARM), in PowerShell (no admin needed, no installer `.exe`):
@@ -88,7 +89,7 @@ Sign in to Facebook in the app window. If you use end-to-end encrypted chats, Me
 
 Quit the app, then delete:
 
-- **macOS:** `~/Applications/Messenger Lite.app` and `~/Library/Application Support/Messenger Lite` (Homebrew: `brew uninstall --zap --cask messenger-lite`)
+- **macOS:** `~/Applications/Messenger Lite.app` and `~/Library/Application Support/Messenger Lite` (Homebrew: `brew uninstall --zap --cask thangldw/messenger-lite/messenger-lite`)
 - **Windows:** `%LOCALAPPDATA%\Programs\Messenger Lite`, `%APPDATA%\Messenger Lite` and the Start menu shortcut (or use *Apps & features* if you used the setup `.exe`)
 - **Linux:** `sudo apt remove messenger-lite` and `~/.config/Messenger Lite`
 
@@ -161,7 +162,7 @@ If a login, security or call step ever gets sent to your browser, add its path p
 - On Windows and Linux, clicking a notification may not bring a hidden window to the front; use the tray icon or the global shortcut.
 - With several accounts, notifications do not say which account they belong to, and clicking one does not switch accounts: the app does not read Facebook's pages, so it cannot see the account name. The tray and *Accounts* menu show unread counts per account.
 - Spellcheck is macOS-only: on Windows and Linux Electron would download dictionaries from Google, so it is off to keep traffic Facebook-only.
-- No automatic installs of updates; turn on *Settings → Check for updates automatically* to be told about new versions, then re-run the install command (or `brew upgrade`).
+- No automatic installs of updates; turn on *Settings → Check for updates automatically* to be told about new versions, then re-run the install command (or `brew upgrade --cask thangldw/messenger-lite/messenger-lite`).
 - Builds are not signed with paid Apple/Microsoft certificates; the install scripts avoid the resulting warnings, browser downloads do not.
 
 ## License

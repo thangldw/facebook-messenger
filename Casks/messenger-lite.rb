@@ -1,6 +1,8 @@
 # Homebrew cask for Messenger Lite. Install with:
 #   brew tap thangldw/messenger-lite https://github.com/thangldw/facebook-messenger
-#   brew install --cask messenger-lite
+#   brew install --cask thangldw/messenger-lite/messenger-lite
+# (Homebrew 6+ only loads casks from third-party taps that you trust; installing
+# by the fully qualified name trusts this cask.)
 # version and sha256 are updated by the release workflow (scripts/packaging.js).
 cask "messenger-lite" do
   arch arm: "arm64", intel: "x64"

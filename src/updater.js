@@ -38,7 +38,7 @@ function updateCommand() {
   if (process.platform === 'darwin') {
     const brew = ['/opt/homebrew/Caskroom/messenger-lite', '/usr/local/Caskroom/messenger-lite'].some((p) => fs.existsSync(p));
     return brew
-      ? 'brew upgrade --cask messenger-lite'
+      ? 'brew upgrade --cask thangldw/messenger-lite/messenger-lite'
       : 'curl -fsSL https://raw.githubusercontent.com/thangldw/facebook-messenger/main/install.sh | bash';
   }
   if (process.platform === 'win32') {

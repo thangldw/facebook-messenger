@@ -197,64 +197,6 @@ jobs:
 
   verify-release:
     needs: [release, homebrew]
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest, windows-11-arm, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          persist-credentials: false
-      - name: Install from the published release (macOS)
-        if: runner.os == 'macOS'
-        env:
-          MESSENGER_LITE_VERSION: ${{ github.ref_name }}
-          MESSENGER_LITE_DIR: ${{ runner.temp }}/apps
-          MESSENGER_LITE_NO_OPEN: "1"
-        run: |
-          ./install.sh
-          codesign --verify --deep --strict "$MESSENGER_LITE_DIR/Messenger Lite.app"
-      - name: Verify build provenance of a release asset
-        if: runner.os == 'macOS'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern '*-mac-arm64.zip' --dir "$RUNNER_TEMP/dl"
-          gh attestation verify "$RUNNER_TEMP"/dl/*-mac-arm64.zip --repo "$GITHUB_REPOSITORY"
-      - name: Install with Homebrew from the tap
-        if: runner.os == 'macOS'
-        run: |
-          brew tap thangldw/messenger-lite "https://github.com/$GITHUB_REPOSITORY"
-          brew install --cask messenger-lite
-          app="/Applications/Messenger Lite.app"
-          test "$(defaults read "$app/Contents/Info.plist" CFBundleShortVersionString)" = "${GITHUB_REF_NAME#v}"
-          codesign --verify --deep --strict "$app"
-          if xattr "$app" | grep -q com.apple.quarantine; then echo "::error::quarantine flag left on app"; exit 1; fi
-          brew uninstall --cask messenger-lite
-      - name: Install from the published release (Windows PowerShell 5.1)
-        if: runner.os == 'Windows'
-        shell: powershell
-        env:
-          MESSENGER_LITE_VERSION: ${{ github.ref_name }}
-          MESSENGER_LITE_NO_OPEN: "1"
-        run: |
-          $env:MESSENGER_LITE_DIR = Join-Path $env:RUNNER_TEMP 'apps\Messenger Lite'
-          .\install.ps1
-          $exe = Join-Path $env:MESSENGER_LITE_DIR 'Messenger Lite.exe'
-          if (-not (Test-Path $exe)) { throw 'exe missing after install' }
-          # On the ARM runner the installer must have picked the native ARM64 build.
-          $fs = [IO.File]::OpenRead($exe); $b = New-Object byte[] 4096; [void]$fs.Read($b, 0, 4096); $fs.Close()
-          $pe = [BitConverter]::ToInt32($b, 0x3c)
-          $machine = [BitConverter]::ToUInt16($b, $pe + 4)
-          $expected = if ($env:RUNNER_ARCH -eq 'ARM64') { 0xAA64 } else { 0x8664 }
-          if ($machine -ne $expected) { throw ('Installed exe has machine type 0x{0:X}, expected 0x{1:X}' -f $machine, $expected) }
-      - name: Install the .deb from the published release
-        if: runner.os == 'Linux'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern '*.deb' --dir "$RUNNER_TEMP/dl"
-          (cd "$RUNNER_TEMP/dl" && gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS.txt && sha256sum -c --ignore-missing SHA256SUMS.txt)
-          sudo apt-get install -y -qq "$RUNNER_TEMP"/dl/*.deb
-          test -x "/opt/Messenger Lite/messenger-lite"
+    uses: ./.github/workflows/verify-install.yml
+    with:
+      version: ${{ github.ref_name }}
