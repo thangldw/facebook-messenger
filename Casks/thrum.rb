@@ -7,9 +7,9 @@
 cask "thrum" do
   arch arm: "arm64", intel: "x64"
 
-  version "0.3.1"
-  sha256 arm:   "67325358346e89993789af26c8abe082d0efa1ff20681357402bf8b18a307020",
-         intel: "85159a4f02de3024d4405114cf6dac20567679d122d458abe9f7121e852f7105"
+  version "0.4.0"
+  sha256 arm:   "2c7fea5b9c053009cd35c4422eacdb9a0d191a188259302332a17d0db99d0b69",
+         intel: "1d132505e03a52d35a5af0657f7bf1757504b40c5c8e59dc5a0967e3abe99b1f"
 
   url "https://github.com/thangldw/thrum/releases/download/v#{version}/Thrum-#{version}-mac-#{arch}.zip"
   name "Thrum"
