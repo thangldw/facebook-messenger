@@ -79,9 +79,12 @@ jobs:
           # Hardened runtime on, with only the entitlements in build/entitlements.mac.plist.
           codesign -dv "$app" 2>&1 | tee codesign.txt
           grep -Eq "flags=.*runtime" codesign.txt
-          codesign -d --entitlements - --xml "$app" > entitlements.xml
-          for e in allow-jit device.audio-input device.camera; do grep -q "com.apple.security.$e" entitlements.xml; done
-          if grep -Eq "allow-dyld-environment-variables|get-task-allow|disable-library-validation" entitlements.xml; then
+          codesign -d --entitlements :- "$app" > entitlements.xml
+          cat entitlements.xml
+          for e in cs.allow-jit cs.disable-library-validation device.audio-input device.camera; do
+            grep -q "com.apple.security.$e" entitlements.xml || { echo "::error::missing entitlement $e"; exit 1; }
+          done
+          if grep -Eq "allow-dyld-environment-variables|get-task-allow" entitlements.xml; then
             echo "::error::unexpected entitlement"; exit 1
           fi
 

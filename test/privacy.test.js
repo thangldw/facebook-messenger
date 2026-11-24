@@ -210,7 +210,8 @@ test('macOS builds use the hardened runtime with only the entitlements calls nee
   const plist = fs.readFileSync(path.join(__dirname, '..', mac.entitlements), 'utf8').replace(/<!--[\s\S]*?-->/g, '');
   const keys = [...plist.matchAll(/<key>([^<]+)<\/key>/g)].map((m) => m[1]).sort();
   assert.deepStrictEqual(keys, [
-    'com.apple.security.cs.allow-jit', 'com.apple.security.device.audio-input', 'com.apple.security.device.camera',
+    'com.apple.security.cs.allow-jit', 'com.apple.security.cs.disable-library-validation',
+    'com.apple.security.device.audio-input', 'com.apple.security.device.camera',
   ]);
   assert.strictEqual(mac.entitlementsInherit, mac.entitlements);
 });
