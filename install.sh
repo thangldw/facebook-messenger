@@ -17,6 +17,9 @@ set -euo pipefail
 
 REPO="thangldw/facebook-messenger"
 APP_NAME="Messenger Lite"
+TMP_DIR=""
+# Global, not local: the EXIT trap runs after main() has returned.
+trap 'if [ -n "${TMP_DIR:-}" ]; then rm -rf "$TMP_DIR"; fi' EXIT
 
 main() {
   say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
@@ -34,9 +37,8 @@ main() {
   esac
 
   local dest="${MESSENGER_LITE_DIR:-$HOME/Applications}"
-  local tmp
-  tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' EXIT
+  TMP_DIR="$(mktemp -d)"
+  local tmp="$TMP_DIR"
 
   local zip
   if [ -n "${MESSENGER_LITE_ZIP:-}" ]; then
