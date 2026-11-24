@@ -1,27 +1,27 @@
 'use strict';
 
-// One Facebook account: a WebContentsView with its own session (partition),
+// One account (Facebook or Zalo): a WebContentsView with its own session (partition),
 // so accounts never share cookies or storage. Every account keeps running in
 // the background, so notifications and unread counts arrive for all of them.
-// Like every Facebook page in the app it has no preload and no IPC.
+// Like every web page in the app it has no preload and no IPC.
 
 const { WebContentsView } = require('electron');
 const { Recovery } = require('./recovery');
+const { serviceFor } = require('./services');
 
-// The default account keeps the v0.1 partition so existing logins survive.
-function partitionFor(id, ephemeral) {
-  if (ephemeral) return `messenger-private-${id}`;
-  return id === 'default' ? 'persist:messenger' : `persist:messenger-${id}`;
+function partitionFor(id, ephemeral, service = 'facebook') {
+  return serviceFor(service).partition(id, ephemeral);
 }
 
 class AccountView {
   /**
-   * @param {object} opts { id, name, ephemeral, startUrl(account), onUnread(account), onStatus(account) }
+   * @param {object} opts { id, name, service, ephemeral, startUrl(account), onUnread(account), onStatus(account) }
    */
-  constructor({ id, name, ephemeral, startUrl, onUnread, onStatus }) {
+  constructor({ id, name, service, ephemeral, startUrl, onUnread, onStatus }) {
     this.id = id;
     this.name = name;
-    this.partition = partitionFor(id, ephemeral);
+    this.service = serviceFor(service);
+    this.partition = this.service.partition(id, ephemeral);
     this.unread = 0;
     this.status = { offline: null, crashed: null };
     this.css = { topbar: null, privacy: null };
@@ -38,10 +38,10 @@ class AccountView {
     this.view.setBackgroundColor('#111214');
     this.wc = this.view.webContents;
 
-    // Unread count: Facebook sets the title to "(3) Messenger" / "(3) Facebook".
+    // Unread state from the title: "(3) Messenger" on Facebook, a scrolling
+    // "new message" text on Zalo (see services.js).
     this.wc.on('page-title-updated', (_e, title) => {
-      const m = /^\((\d+)\)/.exec(title);
-      const n = m ? Number(m[1]) : 0;
+      const n = this.service.unread(title);
       if (n !== this.unread) { this.unread = n; onUnread(this); }
     });
 

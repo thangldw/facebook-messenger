@@ -1,7 +1,6 @@
 'use strict';
 
 const { BaseWindow, desktopCapturer, dialog } = require('electron');
-const { isFacebookUrl } = require('./routes');
 
 const MAX_SOURCES = 12;
 
@@ -12,9 +11,10 @@ function label(source) {
 
 // Fallback picker for getDisplayMedia() where the OS has no native picker
 // (Windows, Linux, macOS < 15). Screens are listed before windows.
-async function handleDisplayMediaRequest(request, callback) {
-  // Only Facebook's own frames may ask to capture the screen.
-  if (!isFacebookUrl(request.securityOrigin)) return callback(null);
+// isOwnUrl is the session's service policy: only that service's own frames
+// (Facebook or Zalo) may ask to capture the screen.
+async function handleDisplayMediaRequest(isOwnUrl, request, callback) {
+  if (!isOwnUrl(request.securityOrigin)) return callback(null);
   try {
     const sources = (await desktopCapturer.getSources({ types: ['screen', 'window'] }))
       .filter((s) => s.name)

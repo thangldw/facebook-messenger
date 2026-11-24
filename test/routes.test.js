@@ -88,3 +88,51 @@ const downloads = [
 for (const [url, want] of downloads) {
   test(`downloadTarget(${JSON.stringify(url)})`, () => assert.strictEqual(downloadTarget(url), want));
 }
+
+// ---- Zalo
+
+const { classifyZalo, isZaloUrl, zaloDownloadTarget } = require('../src/routes');
+
+test('zalo: only chat.zalo.me and its sign-in pages stay in the app', () => {
+  const expect = {
+    'https://chat.zalo.me/': 'allowed',
+    'https://chat.zalo.me/?c=123': 'allowed',
+    'https://id.zalo.me/account?continue=https%3A%2F%2Fchat.zalo.me%2F': 'allowed',
+    'about:blank': 'allowed',
+    'http://chat.zalo.me/': 'external',
+    'https://zalo.me/g/abcdef': 'external',
+    'https://zalo.me/0901234567': 'external',
+    'https://chat.zalo.me.evil.com/': 'external',
+    'https://evilchat.zalo.me.example/': 'external',
+    'https://www.facebook.com/messages/': 'external',
+    'data:text/html,<h1>x</h1>': 'external',
+    'javascript:alert(1)': 'external',
+    'not a url': 'external',
+  };
+  for (const [url, kind] of Object.entries(expect)) assert.strictEqual(classifyZalo(url), kind, url);
+});
+
+test('zalo: own origins', () => {
+  for (const u of ['https://zalo.me', 'https://chat.zalo.me/x', 'https://id.zalo.me']) assert.ok(isZaloUrl(u), u);
+  for (const u of ['http://chat.zalo.me', 'https://zalo.me.evil.com', 'https://notzalo.me', 'https://zdn.vn', 'https://www.facebook.com', 'blob:https://chat.zalo.me/x']) {
+    assert.ok(!isZaloUrl(u), u);
+  }
+});
+
+test('zalo: files on its CDNs and its blob: URLs are downloaded, nothing else', () => {
+  const yes = [
+    'https://f21-zpc.zdn.vn/1234/file.pdf',
+    'https://dl-files.dlfl.vn/x/report.xlsx',
+    'https://a.dlfl.me/b',
+    'https://photo-stal.zadn.vn/img.jpg',
+    'blob:https://chat.zalo.me/9f1c-uuid',
+  ];
+  for (const u of yes) assert.strictEqual(zaloDownloadTarget(u), u, u);
+  const no = [
+    'https://chat.zalo.me/', 'http://f21-zpc.zdn.vn/file.pdf', 'https://zdn.vn.evil.com/f', 'https://evil.com/zdn.vn',
+    'blob:https://evil.com/x', 'blob:null/x', 'https://x.fbsbx.com/file', null, 42,
+  ];
+  for (const u of no) assert.strictEqual(zaloDownloadTarget(u), null, String(u));
+  // And Facebook's policy never treats Zalo CDNs as its own downloads.
+  assert.strictEqual(downloadTarget('https://f21-zpc.zdn.vn/1234/file.pdf'), null);
+});

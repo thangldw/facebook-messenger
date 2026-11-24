@@ -1,6 +1,8 @@
 # Privacy and security
 
-**Short answer:** Thrum never sees, stores or sends your Facebook username or password. You type them into Facebook's own login page, which sends them straight to Facebook over HTTPS, exactly as in a browser. The app keeps only what a browser keeps to stay signed in (a session cookie, encrypted with your OS keychain) plus Facebook's own cache, all on your computer.
+**Short answer:** Thrum never sees, stores or sends your Facebook or Zalo username or password. You sign in on Facebook's or Zalo's own login page (for Zalo, by scanning a QR code with your phone), which talks straight to that service over HTTPS, exactly as in a browser. The app keeps only what a browser keeps to stay signed in (a session cookie, encrypted with your OS keychain) plus the service's own cache, all on your computer.
+
+Everything below applies to Zalo accounts the same way as to Facebook accounts: wherever it says "Facebook", read "the account's own service".
 
 This document explains what that claim rests on and how you can check each part yourself, without trusting the author.
 
@@ -23,11 +25,11 @@ Everything lives in one folder on your computer and nowhere else:
 | Facebook's cache, local storage, IndexedDB | `Partitions/messenger/…` | Yes, as in a browser. Written by Facebook's web page, not by the app. Can include recent messages Facebook caches for speed. |
 | Files you download | Where you choose (Downloads by default) | Only when you click download on an attachment or photo. Attachments are always saved as files, never opened inside the app. |
 | App settings | `settings.json` | Yes: your choices in the Settings menu, window size/position, the names you gave your accounts in the app, and your focus schedule. Also, unless you turn it off or use private mode, the **address of the last conversation** opened in each account (e.g. `/messages/t/1234`, no names or content), so it can reopen on launch. |
-| Several accounts | `Partitions/messenger`, `Partitions/messenger-<id>` | Each account has its own, separate session folder. Accounts never share cookies or storage; removing an account deletes its folder's data. |
+| Several accounts | `Partitions/messenger`, `Partitions/messenger-<id>` (Facebook), `Partitions/zalo-<id>` (Zalo) | Each account has its own, separate session folder. Accounts never share cookies or storage; removing an account deletes its folder's data. |
 | App lock password | `settings.json` | **Only a salted scrypt hash**, never the password itself. The hash cannot be turned back into the password; it can only check a guess, and the app slows down repeated wrong guesses. |
 | Private mode | — | With *Settings → Private mode* on, Facebook's session, cache and storage are kept in memory only and vanish when you quit. Turning it on also deletes what was stored before. |
 
-The app sends **nothing** anywhere itself: no analytics, no crash reports. The only network traffic is Facebook's web page talking to Facebook, plus links you choose to open in your browser, with one opt-in exception: if you turn on *Settings → Check for updates automatically* (off by default) or click *Check for Updates…*, the app asks `api.github.com` for the latest release of this project (automatically at most once a day). That request carries no cookies and no data about you beyond the app version in its User-Agent and your IP address, which any web request reveals. Spellcheck uses the macOS spellchecker on macOS; on Windows and Linux it is turned off, because Electron would download dictionaries from Google there.
+The app sends **nothing** anywhere itself: no analytics, no crash reports. The only network traffic is each account's web page talking to its own service (and whatever that page itself loads, as in a browser: Zalo's page, for example, loads Google Analytics), plus links you choose to open in your browser, with one opt-in exception: if you turn on *Settings → Check for updates automatically* (off by default) or click *Check for Updates…*, the app asks `api.github.com` for the latest release of this project (automatically at most once a day). That request carries no cookies and no data about you beyond the app version in its User-Agent and your IP address, which any web request reveals. Spellcheck uses the macOS spellchecker on macOS; on Windows and Linux it is turned off, because Electron would download dictionaries from Google there.
 
 ## Why the app cannot read your password
 
@@ -37,12 +39,12 @@ Your login happens inside Facebook's web page. The app is deliberately built so 
 2. **The page is isolated from the app.** It runs with `contextIsolation: true`, `sandbox: true` and `nodeIntegration: false`, so Facebook's page, or anything injected into it, cannot reach the app or your files either.
 3. **The app does not touch cookies or traffic.** It never reads the cookie store and does not inspect, intercept or proxy network requests.
 4. **The binary is hardened.** Builds enable the Electron fuses that encrypt cookies at rest and disable `ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS` and `--inspect`, the usual ways to turn an Electron app into a tool for reading its data. The app only loads its own code from its integrity-checked `app.asar`.
-5. **Minimal permissions, Facebook only.** Facebook's own pages may use notifications, microphone/camera (calls), screen capture (screen sharing, after you pick a screen), clipboard write and fullscreen. Third-party content embedded in a page gets none of these, and everything else (location, USB, Bluetooth, …) is denied for everyone.
-6. **No fake login windows.** App windows have no address bar, so nothing but Facebook may ever render in one. Every window, including call windows and popups, refuses `data:`, `blob:` and `file:` pages and any non-Facebook site, whether reached by a link, a script, a popup or a server redirect; those links open in your normal browser, where you can see the address. Only `http`/`https` links are handed to the browser, so a page cannot launch other programs on your computer.
+5. **Minimal permissions, own service only.** Each account's session grants permissions only to its own service's pages (Facebook's for a Facebook account, `zalo.me`'s for a Zalo account), never to the other service. Those pages may use notifications, microphone/camera (calls), screen capture (screen sharing, after you pick a screen), clipboard write and fullscreen. Third-party content embedded in a page gets none of these, and everything else (location, USB, Bluetooth, …) is denied for everyone.
+6. **No fake login windows.** App windows have no address bar, so nothing but the account's own service may ever render in one. Every window, including call windows and popups, refuses `data:`, `blob:` and `file:` pages and any other site, whether reached by a link, a script, a popup or a server redirect; those links open in your normal browser, where you can see the address. Only `http`/`https` links are handed to the browser, so a page cannot launch other programs on your computer.
 
 These rules are enforced by automated tests in [`test/privacy.test.js`](test/privacy.test.js), which run on every push. If anyone adds code that runs scripts in the page, reads cookies, makes its own network requests, uploads crash reports or weakens the isolation settings, the tests fail.
 
-The whole app is three short files in [`src/`](src/) with no runtime dependencies, so it is practical to read all of it.
+The whole app is a handful of short files in [`src/`](src/) with no runtime dependencies, so it is practical to read all of it.
 
 ## Verify it yourself
 
@@ -62,7 +64,7 @@ After signing in, look in the `Partitions/messenger` folder listed above. A Chro
 
 ```bash
 # macOS
-ls ~/Library/Application\ Support/Messenger\ Lite/Partitions/messenger | grep -E "Login Data|Web Data" || echo "no password or autofill store"
+ls ~/Library/Application\ Support/Thrum/Partitions/messenger | grep -E "Login Data|Web Data" || echo "no password or autofill store"
 ```
 
 ```powershell
@@ -87,12 +89,12 @@ npx @electron/fuses read --app "$HOME/Applications/Thrum.app"
 
 ### 4. The only network traffic is Facebook
 
-Use a network monitor such as Little Snitch or LuLu (macOS), or Resource Monitor → Network (Windows). Connections go to Facebook's domains (`facebook.com`, `fbcdn.net`, and related Meta hosts), never to the author or any third party.
+Use a network monitor such as Little Snitch or LuLu (macOS), or Resource Monitor → Network (Windows). Connections go to Facebook's domains (`facebook.com`, `fbcdn.net`, and related Meta hosts) and, with a Zalo account, Zalo's (`zalo.me`, `zdn.vn`, `zadn.vn` and its file hosts) plus what Zalo's page loads itself, never to the author.
 
 ### 5. Read the code
 
 - [`src/main.js`](src/main.js): window, isolation settings, permissions, the injected CSS.
-- [`src/routes.js`](src/routes.js): which URLs stay in the app; pure URL matching.
+- [`src/routes.js`](src/routes.js), [`src/services.js`](src/services.js): which URLs stay in the app, per service; pure URL matching.
 - [`src/screen-share.js`](src/screen-share.js): asks you which screen to share during a call.
 
 ## Removing your data
@@ -107,7 +109,7 @@ The lock hides the app's window behind the lock screen, withholds notifications 
 
 ## What this app cannot protect against
 
-- **Facebook itself.** Your messages and account are processed by Meta exactly as when you use facebook.com.
+- **Facebook and Zalo themselves.** Your messages and accounts are processed by Meta and Zalo exactly as when you use facebook.com or chat.zalo.me.
 - **Someone with access to your user account on the computer.** Like any browser, a signed-in session on your computer can be used by anyone who can use your login. Cookie encryption protects the cookie file if it is copied off the machine or read by another user, not against malware running as you.
 - **Facebook's cached data.** Facebook's web page may cache recent messages in its local storage. That data is not encrypted by the app; use full-disk encryption (FileVault, BitLocker), which you should have on anyway.
 

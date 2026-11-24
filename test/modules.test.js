@@ -225,12 +225,52 @@ test('settings: accounts are validated and the active account must exist', () =>
     activeAccount: 'zz99',
     lastChats: { default: '/messages/t/1', ab12: 'https://evil.example', ghost: '/messages/t/2' },
   });
-  assert.deepStrictEqual(s.accounts, [{ id: 'default', name: 'Personal' }, { id: 'ab12', name: 'Work' }]);
+  assert.deepStrictEqual(s.accounts, [{ id: 'default', name: 'Personal', service: 'facebook' }, { id: 'ab12', name: 'Work', service: 'facebook' }]);
   assert.strictEqual(s.activeAccount, 'default', 'unknown active account falls back to the first');
   assert.deepStrictEqual(s.lastChats, { default: '/messages/t/1' });
   for (const bad of [[], [{ id: 'A!', name: 'x' }], [{ id: 'a', name: '' }], [{ id: 'a', name: 'x' }, { id: 'a', name: 'y' }], Array(10).fill(0).map((_, i) => ({ id: `a${i}`, name: 'x' }))]) {
-    assert.deepStrictEqual(sanitize({ accounts: bad }).accounts, [{ id: 'default', name: 'Account 1' }], JSON.stringify(bad));
+    assert.deepStrictEqual(sanitize({ accounts: bad }).accounts, [{ id: 'default', name: 'Account 1', service: 'facebook' }], JSON.stringify(bad));
   }
+});
+
+test('settings: accounts carry a service; unknown services are skipped, not fatal', () => {
+  const s = sanitize({
+    accounts: [{ id: 'default', name: 'Me' }, { id: 'z1', name: 'Zalo 1', service: 'zalo' }, { id: 'x1', name: 'Future', service: 'telegram' }],
+  });
+  assert.deepStrictEqual(s.accounts, [
+    { id: 'default', name: 'Me', service: 'facebook' },
+    { id: 'z1', name: 'Zalo 1', service: 'zalo' },
+  ]);
+  assert.deepStrictEqual(sanitize({ accounts: [{ id: 'x1', name: 'F', service: 'telegram' }] }).accounts[0].id, 'default');
+  for (const bad of [null, 1, 'ZALO', '']) {
+    assert.deepStrictEqual(sanitize({ accounts: [{ id: 'a', name: 'x', service: bad }] }).accounts[0].id, 'default', String(bad));
+  }
+});
+
+test('services: partitions never collide across services or modes', () => {
+  const { SERVICES } = require('../src/services');
+  const { partitionFor } = { partitionFor: (id, e, s) => SERVICES[s].partition(id, e) };
+  assert.strictEqual(partitionFor('default', false, 'facebook'), 'persist:messenger', 'v0.1 login survives');
+  const all = [];
+  for (const svc of ['facebook', 'zalo']) for (const id of ['default', 'ab12']) for (const e of [false, true]) all.push(partitionFor(id, e, svc));
+  assert.strictEqual(new Set(all).size, all.length, all.join());
+  for (const p of all.filter((x) => x.includes('private'))) assert.ok(!p.startsWith('persist:'), p);
+});
+
+test('services: unread parsing (Facebook count, Zalo scrolling "new message" title)', () => {
+  const { facebookUnread, zaloUnread, ZALO_NEW_MESSAGE } = require('../src/services');
+  assert.strictEqual(facebookUnread('(3) Messenger'), 3);
+  assert.strictEqual(facebookUnread('Messenger'), 0);
+  assert.strictEqual(zaloUnread('Zalo'), 0);
+  assert.strictEqual(zaloUnread('Zalo - Nguyễn Văn A'), 0);
+  const text = ` ${ZALO_NEW_MESSAGE} `;
+  // Every frame of Zalo's 60 ms title scroller, as Chromium reports it (trimmed).
+  for (let i = 0; i < text.length; i += 1) {
+    const frame = (text.slice(i) + text.slice(0, i)).trim();
+    assert.strictEqual(zaloUnread(frame), 1, JSON.stringify(frame));
+  }
+  assert.strictEqual(zaloUnread('(2) Zalo'), 1);
+  assert.strictEqual(zaloUnread('bạn có tin nhắn mới'), 0, 'partial text is not the scroller');
 });
 
 test('settings: v0.2 single lastChat migrates to the default account', () => {

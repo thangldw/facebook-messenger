@@ -21,7 +21,10 @@ function render(state) {
     if (first) first.focus();
   }
   if (mode === 'lock') $('touchid').hidden = !state.touchId;
-  if (mode === 'offline') $('offline-status').textContent = state.status || 'Retrying…';
+  if (mode === 'offline') {
+    $('offline-title').textContent = `Can't reach ${state.service || 'Facebook'}`;
+    $('offline-status').textContent = state.status || 'Retrying…';
+  }
 }
 
 async function busy(button, fn) {

@@ -2,7 +2,7 @@
   "name": "thrum",
   "productName": "Thrum",
   "version": "0.3.0",
-  "description": "Desktop app for Facebook Messenger with the News Feed blocked",
+  "description": "Desktop app for Facebook Messenger and Zalo, with the News Feed blocked",
   "main": "src/main.js",
   "private": true,
   "author": "Thang <thangldw@gmail.com>",
@@ -95,7 +95,7 @@
       ],
       "category": "Network",
       "maintainer": "Thang <thangldw@gmail.com>",
-      "synopsis": "Facebook Messenger without the News Feed",
+      "synopsis": "Facebook Messenger and Zalo without the News Feed",
       "artifactName": "Thrum-${version}-linux-${arch}.${ext}"
     }
   },

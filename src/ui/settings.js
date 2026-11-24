@@ -24,9 +24,11 @@ function renderAccounts() {
     const input = row.querySelector('.name');
     input.value = acc.name;
     input.dataset.id = acc.id;
+    row.querySelector('.service').textContent = acc.serviceLabel;
     const badge = row.querySelector('.badge');
     badge.hidden = !acc.unread;
-    badge.textContent = acc.unread || '';
+    // Zalo only reports that there are new messages, not how many.
+    badge.textContent = acc.unread ? (acc.countsUnread ? acc.unread : 'New') : '';
     const save = async () => {
       const result = await api.renameAccount(acc.id, input.value);
       $('accounts-error').textContent = result && !result.ok ? result.error : '';
@@ -42,13 +44,25 @@ function renderAccounts() {
     list.appendChild(row);
     if (editing === acc.id) input.focus();
   }
-  $('add-account').disabled = state.accounts.length >= state.maxAccounts;
+  const full = state.accounts.length >= state.maxAccounts;
+  const buttons = $('add-buttons');
+  if (buttons.childElementCount !== state.services.length) {
+    buttons.replaceChildren();
+    for (const svc of state.services) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'secondary';
+      b.dataset.service = svc.id;
+      b.textContent = `Add ${svc.label} account`;
+      b.addEventListener('click', async () => {
+        const result = await api.addAccount(svc.id);
+        $('accounts-error').textContent = result && !result.ok ? result.error : '';
+      });
+      buttons.appendChild(b);
+    }
+  }
+  for (const b of buttons.children) b.disabled = full;
 }
-
-$('add-account').addEventListener('click', async () => {
-  const result = await api.addAccount();
-  $('accounts-error').textContent = result && !result.ok ? result.error : '';
-});
 
 // ---- focus schedule
 

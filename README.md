@@ -1,12 +1,14 @@
 # Thrum
 
-A quiet desktop app for your Facebook messages on macOS, Windows and Linux: chat without opening Facebook in a browser, and without the feed.
+A quiet desktop app for your Facebook messages and Zalo chats on macOS, Windows and Linux: chat without opening them in a browser, and without Facebook's feed.
 
 *Formerly Messenger Lite.* The app was renamed in v0.3.0 so it is not confused with Meta's own products. Updating with the install command or Homebrew replaces the old app and keeps your settings and accounts; on macOS you sign in to Facebook once more, because the cookie key in the Keychain was stored under the old name.
 
 It wraps Facebook's own web client at `facebook.com/messages` (messenger.com was shut down in April 2026 and now redirects there). There is no reverse-engineered protocol and no unofficial API, so it behaves exactly like Messenger in a browser, minus the rest of Facebook.
 
-> Thrum is an independent project, not affiliated with or endorsed by Meta. "Facebook" and "Messenger" are trademarks of Meta Platforms, Inc., used here only to describe what the app works with.
+Zalo accounts (since v0.4.0) run Zalo's own web client at `chat.zalo.me` the same way: you sign in on Zalo's page by scanning a QR code with the Zalo phone app.
+
+> Thrum is an independent project, not affiliated with or endorsed by Meta. "Facebook" and "Messenger" are trademarks of Meta Platforms, Inc., used here only to describe what the app works with. Thrum is likewise not affiliated with Zalo or VNG Corporation; "Zalo" is their trademark.
 
 ## Features
 
@@ -16,7 +18,8 @@ It wraps Facebook's own web client at `facebook.com/messages` (messenger.com was
 - **Screen sharing** in calls: the native picker on macOS 15+, and a source chooser on Windows, Linux and older macOS. On Windows it can also share system audio.
 - **Native notifications** and an unread count: menu bar/tray icon, dock badge (macOS), taskbar badge (Windows), window title.
 - **Runs in the background.** Closing the window keeps it in the menu bar (macOS) or system tray (Windows, Linux) so you still get notifications. Optional **Open at login**.
-- **Multiple accounts**, each with its own separate login. All of them keep running, so you get notifications and unread counts for every account; switch from the *Accounts* menu, the tray, or `Cmd/Ctrl + 1…9`. With one account the app runs a single Facebook page; each extra account adds roughly 200–500 MB of memory depending on how much it has loaded.
+- **Zalo too.** Add a Zalo account next to your Facebook ones (*Accounts → Add Zalo account*); it gets the same notifications, pause, lock, privacy screen, private mode and recovery. Links people send open in your browser and files from Zalo's servers download to a folder you choose.
+- **Multiple accounts** (Facebook and Zalo, up to 9), each with its own separate login. All of them keep running, so you get notifications and unread counts for every account; switch from the *Accounts* menu, the tray, or `Cmd/Ctrl + 1…9`. With one account the app runs a single page; each extra account adds roughly 200–500 MB of memory depending on how much it has loaded.
 - **Pause notifications** for an hour, until tomorrow morning, or until you resume (*Notifications* menu or tray), or on a weekly **focus schedule** (e.g. weekdays 9:00–18:00, or 22:00–07:00 overnight).
 - **Global shortcut** to show or hide the app from anywhere: `⌃⌥M` on macOS, `Ctrl+Alt+Shift+M` on Windows/Linux.
 - **App lock** with a password (and Touch ID on macOS). Locks on launch, when the computer locks or sleeps, and after 1–60 minutes of inactivity. Notification previews are withheld while locked.
@@ -31,7 +34,7 @@ Toggles are under the **Settings** menu; accounts and the focus schedule are edi
 
 ## Privacy
 
-**The app never sees, stores or sends your Facebook username or password.** You sign in on Facebook's own page, which sends them straight to Facebook. The app keeps only an encrypted session cookie on your computer and sends nothing anywhere itself, except an optional, off-by-default check for new versions. [PRIVACY.md](PRIVACY.md) explains why, and how to verify every claim yourself.
+**The app never sees, stores or sends your Facebook or Zalo username or password.** You sign in on Facebook's or Zalo's own page, which sends them straight to that service (Zalo signs in by QR code). The app keeps only an encrypted session cookie on your computer and sends nothing anywhere itself, except an optional, off-by-default check for new versions. [PRIVACY.md](PRIVACY.md) explains why, and how to verify every claim yourself.
 
 ## Install
 
@@ -87,6 +90,8 @@ Files downloaded with a browser are flagged by the OS because the builds are not
 
 Sign in to Facebook in the app window. If you use end-to-end encrypted chats, Messenger may ask for your PIN to restore your history, the same as in a browser. On macOS, allow the Keychain prompt for "Thrum Safe Storage" (used to encrypt the session cookie) with **Always Allow**.
 
+For a Zalo account, open the Zalo app on your phone, tap the QR scanner and scan the code shown in the app window, then confirm on the phone.
+
 ### Uninstall
 
 Quit the app, then delete:
@@ -131,8 +136,9 @@ The workflow fails if the tag does not match the `version` in `package.json`. It
 | File | Purpose |
 |---|---|
 | `src/main.js` | Window, sessions, permissions, accounts, menus, wiring |
-| `src/account-view.js` | One Facebook account: a view with its own session |
-| `src/routes.js` | Route policy: which URLs stay in-app, bounce to the inbox, download, or open externally |
+| `src/account-view.js` | One account: a view with its own session |
+| `src/services.js` | Per-service policy (Facebook, Zalo): start page, routes, own origins, downloads, unread parsing, session partition |
+| `src/routes.js` | Route rules: which URLs stay in-app, bounce to the inbox, download, or open externally |
 | `src/settings.js` | Settings, validated against a schema on every read |
 | `src/tray.js`, `src/dnd.js`, `src/focus.js` | Menu bar/tray icon, pause notifications, focus schedule |
 | `src/lock.js`, `src/password.js` | App lock: scrypt password hash, Touch ID, auto-lock |
@@ -145,7 +151,7 @@ The workflow fails if the tag does not match the `version` in `package.json`. It
 
 Security issues: see [SECURITY.md](SECURITY.md).
 
-The page runs with `contextIsolation`, `sandbox` and no Node integration; the app injects only CSS. Permissions are limited to notifications, microphone/camera, screen capture, clipboard write and fullscreen. Builds enable cookie encryption and disable Electron's Node/inspector entry points via fuses. The user agent drops the `Electron` token so Facebook serves its normal web client.
+The page runs with `contextIsolation`, `sandbox` and no Node integration; the app injects only CSS. Permissions are limited to notifications, microphone/camera, screen capture, clipboard write and fullscreen, and only for the account's own service: a Zalo account's session never grants anything to Facebook origins, and the reverse. Builds enable cookie encryption and disable Electron's Node/inspector entry points via fuses. The user agent drops the `Electron` token so Facebook serves its normal web client (and Zalo shows its QR code).
 
 ### Adjusting the route policy
 
@@ -157,13 +163,17 @@ All rules live in `src/routes.js`:
 
 If a login, security or call step ever gets sent to your browser, add its path prefix to `ALLOWED_PREFIXES` and run `npm test`.
 
+For Zalo, only `chat.zalo.me` and the sign-in pages on `id.zalo.me` stay in-app (`ZALO_APP_HOSTS`); files on the hosts in `ZALO_FILE_DOMAINS` (from Zalo's own Content-Security-Policy) are downloaded; everything else, including `zalo.me/g/…` group links, opens in your browser.
+
 ## Known limitations
 
 - Depends on Facebook's web client: if Meta changes it, the top-bar hiding (`div[role="banner"]`) or a route may need updating.
 - **A Facebook account is required.** Since messenger.com closed, Meta only offers Messenger on desktop through facebook.com, so this app cannot be used with a deactivated Facebook account without reactivating it (signing in to facebook.com reactivates a deactivated account), nor with a Messenger-only account. Meta's mobile Messenger app is the only option for those.
 - On Windows and Linux, clicking a notification may not bring a hidden window to the front; use the tray icon or the global shortcut.
 - With several accounts, notifications do not say which account they belong to, and clicking one does not switch accounts: the app does not read Facebook's pages, so it cannot see the account name. The tray and *Accounts* menu show unread counts per account.
-- Spellcheck is macOS-only: on Windows and Linux Electron would download dictionaries from Google, so it is off to keep traffic Facebook-only.
+- **Zalo shows no unread count.** Zalo Web only signals new messages by scrolling "bạn có tin nhắn mới" through its title while it is not focused, so a Zalo account gets a "new messages" mark (counted as 1 in the badge) until you open it, not a number.
+- When the network is down, a Zalo account usually shows Zalo's own offline state (Zalo caches its app in a service worker) rather than Thrum's reconnect screen.
+- Spellcheck is macOS-only: on Windows and Linux Electron would download dictionaries from Google, so it is off to keep traffic to the messaging services only.
 - No automatic installs of updates; turn on *Settings → Check for updates automatically* to be told about new versions, then re-run the install command (or `brew upgrade --cask thangldw/thrum/thrum`).
 - Builds are not signed with paid Apple/Microsoft certificates; the install scripts avoid the resulting warnings, browser downloads do not.
 

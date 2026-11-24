@@ -12,9 +12,9 @@
   <main>
     <section id="accounts" aria-labelledby="accounts-title">
       <h1 id="accounts-title">Accounts</h1>
-      <p class="muted">Each account has its own login, kept separate from the others. Switch with the Accounts menu, the tray icon, or <kbd id="switch-key">⌘1</kbd>…<kbd>9</kbd>.</p>
+      <p class="muted">Facebook and Zalo accounts, each with its own login, kept separate from the others. Switch with the Accounts menu, the tray icon, or <kbd id="switch-key">⌘1</kbd>…<kbd>9</kbd>.</p>
       <ul id="account-list" class="list"></ul>
-      <button id="add-account" type="button" class="secondary">Add account</button>
+      <div class="add-buttons" id="add-buttons"></div>
       <p class="error" id="accounts-error" role="alert"></p>
     </section>
 
@@ -32,6 +32,7 @@
   </main>
   <template id="account-row">
     <li class="account">
+      <span class="service"></span>
       <input class="name" type="text" maxlength="40" aria-label="Account name">
       <span class="badge" hidden></span>
       <button type="button" class="small rename">Rename</button>
