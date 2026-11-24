@@ -99,12 +99,14 @@ Use a network monitor such as Little Snitch or LuLu (macOS), or Resource Monitor
 ## Removing your data
 
 - **In the app:** Accounts → **Log out and clear data…** deletes the session cookie, Facebook's cache and storage, and the remembered conversation. You will need to sign in again.
-- **Forgot the app-lock password:** *Forgot password? Log out and reset…* on the lock screen does the same and turns the lock off. There is no other way past the lock.
+- **Forgot the app-lock password:** *Forgot password? Log out and reset…* on the lock screen does the same and turns the lock off. That is the only way past the lock from inside the app; someone who can edit files in your user account can also turn the lock off in `settings.json` (see below).
 - **Completely:** quit the app, then delete the folder from the first table above.
 
 ## About the app lock
 
 The lock hides the app's window behind the lock screen (call windows and other popups are hidden too, and none can open while locked), withholds notifications (whose previews would show message text) and disables DevTools until you unlock. It is a privacy screen for a shared or unattended computer, not encryption: Facebook's session stays on disk as described above, so someone with full access to your user account and enough skill could still extract it. Use your operating system's account password and full-disk encryption for that threat.
+
+For the same reason the lock does not stop someone who can run programs or edit files as you: setting `"lockEnabled": false` in `settings.json` (or deleting the file) turns it off and keeps the Facebook sessions. Wrong guesses are slowed down across restarts (after 5 failures, up to 5 minutes per attempt), and new passwords need at least 6 characters.
 
 ## What this app cannot protect against
 

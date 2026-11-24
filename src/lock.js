@@ -16,7 +16,13 @@ class AppLock {
     this.overlay = overlay;
     this.onChange = onChange;
     this.locked = false;
-    this.throttle = new Throttle();
+    this.throttle = new Throttle(undefined, {
+      load: () => ({ failures: settings.get('lockFailures'), blockedUntil: settings.get('lockBlockedUntil') }),
+      save: ({ failures, blockedUntil }) => {
+        settings.set('lockFailures', failures);
+        settings.set('lockBlockedUntil', blockedUntil);
+      },
+    });
 
     const lockIfEnabled = () => this.lock();
     powerMonitor.on('lock-screen', lockIfEnabled);
@@ -87,6 +93,7 @@ class AppLock {
     this.settings.set('lockSalt', salt);
     this.settings.set('lockHash', hash);
     this.settings.set('lockEnabled', true);
+    this.throttle.succeed();
     this.overlay.setLayer('setup', null);
     this.onChange();
     return { ok: true };
@@ -101,6 +108,7 @@ class AppLock {
     this.settings.set('lockEnabled', false);
     this.settings.set('lockSalt', '');
     this.settings.set('lockHash', '');
+    this.throttle.succeed();
     if (this.locked) this.unlockNow(); else this.onChange();
   }
 }

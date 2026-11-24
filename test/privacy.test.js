@@ -175,9 +175,13 @@ test('the session (user agent, permissions) is configured before an account view
   assert.ok(fn.indexOf('configureSession(') > 0 && fn.indexOf('configureSession(') < fn.indexOf('new AccountView('));
 });
 
-test('packaged builds refuse remote-debugging switches', () => {
-  assert.ok(main.includes('if (app.isPackaged && DEBUG_SWITCHES.some((s) => app.commandLine.hasSwitch(s))) {\n  app.exit(1);'));
-  for (const s of ['remote-debugging-port', 'remote-debugging-pipe']) assert.ok(main.includes(`'${s}'`));
+test('packaged builds refuse remote-debugging and network-override switches', () => {
+  assert.ok(main.includes('if (app.isPackaged && BLOCKED_SWITCHES.some((s) => app.commandLine.hasSwitch(s))) {\n  app.exit(1);'));
+  const list = main.slice(main.indexOf('const BLOCKED_SWITCHES = ['), main.indexOf('];', main.indexOf('const BLOCKED_SWITCHES = [')));
+  for (const s of ['remote-debugging-port', 'remote-debugging-pipe', 'remote-debugging-address', 'proxy-server', 'proxy-pac-url',
+    'host-resolver-rules', 'host-rules', 'ignore-certificate-errors', 'ignore-certificate-errors-spki-list', 'disable-web-security']) {
+    assert.ok(list.includes(`'${s}'`), `${s} not blocked`);
+  }
 });
 
 test('no third-party spellcheck dictionary downloads (Windows/Linux)', () => {

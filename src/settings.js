@@ -50,6 +50,9 @@ const SCHEMA = {
   lockAfterMinutes: num(5, (v) => LOCK_MINUTES.includes(v)),
   lockSalt: hex(32),
   lockHash: hex(128),
+  // Wrong-password throttle (password.js), kept across restarts.
+  lockFailures: num(0, (v) => Number.isInteger(v) && v >= 0),
+  lockBlockedUntil: num(0, (v) => v >= 0),
   lastUpdateCheck: num(0, (v) => v >= 0),
   accounts: {
     default: [{ id: 'default', name: 'Account 1' }],

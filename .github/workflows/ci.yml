@@ -29,6 +29,11 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
       - run: npm test
+        env:
+          # The tests never start Electron, and npm ci skipped its binary. Without this,
+          # require('electron') downloads it lazily in every test file that loads it, and
+          # those parallel downloads race (seen on Windows: "failed to create directory").
+          ELECTRON_OVERRIDE_DIST_PATH: ${{ runner.temp }}
       - name: Syntax check main process
         shell: bash
         run: for f in src/*.js; do node --check "$f"; done

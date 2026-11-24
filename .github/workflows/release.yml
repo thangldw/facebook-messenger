@@ -193,7 +193,12 @@ jobs:
           $version = $env:GITHUB_REF_NAME.TrimStart('v')
           gh release download $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --pattern '*-winget-manifests.zip' --dir dl
           Expand-Archive dl\*.zip -DestinationPath wm
-          Invoke-WebRequest -UseBasicParsing https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+          # Pinned release and checksum: this job holds WINGET_TOKEN. To update, download the new
+          # wingetcreate.exe from github.com/microsoft/winget-create/releases and put its SHA-256 here.
+          $wingetcreate = 'https://github.com/microsoft/winget-create/releases/download/v1.28.1.0/wingetcreate.exe'
+          $wingetcreateSha256 = '63d980ba79e97042395bd6eb5992c2db9e01e9e7a8a22958a95c288f27310413'
+          Invoke-WebRequest -UseBasicParsing $wingetcreate -OutFile wingetcreate.exe
+          if ((Get-FileHash -Algorithm SHA256 wingetcreate.exe).Hash.ToLowerInvariant() -ne $wingetcreateSha256) { throw 'wingetcreate.exe checksum mismatch' }
           .\wingetcreate.exe submit --token $env:WINGET_TOKEN "wm\manifests\t\ThangLDW\Thrum\$version"
 
   verify-release:

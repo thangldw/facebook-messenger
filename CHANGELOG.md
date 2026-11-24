@@ -5,6 +5,9 @@
 - Security: the app lock now also hides call windows and other popups, and no new window opens while locked. Before, a call window stayed visible and usable above the lock.
 - Security: a popup opened by a non-Facebook frame embedded in a page (which could write a fake login page into a window with no address bar) is closed before it is shown.
 - Release builds no longer fetch `@electron/fuses` from npm while building the shipped files; it is pinned in `package-lock.json`.
+- App lock: wrong-password slowdown now survives quitting and relaunching. New passwords need at least 6 characters (an existing shorter password keeps working). PRIVACY.md now says plainly that someone who can edit your files can turn the lock off.
+- Packaged builds refuse to start with Chromium switches that would let another program intercept the Facebook session: `--proxy-server`, `--proxy-pac-url`, `--host-resolver-rules`, `--host-rules`, `--ignore-certificate-errors`, `--ignore-certificate-errors-spki-list` and `--disable-web-security` (as well as the remote-debugging switches already refused). If you need a proxy, set it in your system's proxy settings, which Thrum uses.
+- Release workflow: the winget submission job downloads a pinned `wingetcreate.exe` and checks its SHA-256.
 
 ## 0.4.0
 
