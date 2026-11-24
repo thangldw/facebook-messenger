@@ -94,8 +94,23 @@ test('update check: off by default, GitHub releases API only, no cookies', () =>
   const up = code('updater.js');
   assert.ok(up.includes("const API_URL = 'https://api.github.com/repos/thangldw/thrum/releases/latest';"));
   const fetches = up.match(/net\.fetch\(([^,]+),/g) || [];
-  assert.deepStrictEqual(fetches, ['net.fetch(API_URL,']);
+  assert.deepStrictEqual(fetches, ['net.fetch(API_URL,'], 'the release check');
   assert.match(up, /credentials: 'omit'/);
+  const requests = up.match(/net\.request\(\{[^}]*\}\)/g) || [];
+  assert.deepStrictEqual(requests, ["net.request({ url, redirect: 'manual', useSessionCookies: false, cache: 'no-store' })"], 'release downloads, without cookies');
+  // Downloads: this repository's releases only, every redirect hop checked, checksum before use.
+  assert.ok(up.includes("const DOWNLOAD_BASE = 'https://github.com/thangldw/thrum/releases/download/';"));
+  assert.match(up, /if \(!allowedDownloadUrl\(url\)\) \{ reject\(new Error\('Download left GitHub'\)\); return; \}\s*const req = net\.request\(/);
+  assert.match(up, /if \(hops > MAX_REDIRECTS \|\| !allowedDownloadUrl\(next\)\) \{\s*req\.abort\(\);/);
+  assert.match(up, /if \(hash\.digest\('hex'\) !== expected\) throw/);
+  const { allowedDownloadUrl, releaseFileUrl } = require('../src/updater');
+  assert.ok(allowedDownloadUrl('https://objects.githubusercontent.com/x'));
+  for (const bad of ['http://github.com/x', 'https://evil.com/x', 'https://github.com.evil.com/x', 'file:///etc/passwd']) assert.ok(!allowedDownloadUrl(bad), bad);
+  assert.throws(() => releaseFileUrl('0.4.0', '../../evil'));
+  assert.throws(() => releaseFileUrl('latest', 'SHA256SUMS.txt'));
+  // Installing happens only after the user clicks "Update now", never from the automatic check.
+  assert.doesNotMatch(main, /onUpdateAvailable[^}]*installUpdate/);
+  assert.match(main, /if \(response === 0\) installUpdate\(release\);/);
   assert.match(up, /async autoCheck\(\) \{\s*if \(!this\.settings\.get\('checkForUpdates'\)\) return;/);
   assert.strictEqual(require('../src/settings').SCHEMA.checkForUpdates.default, false);
 });

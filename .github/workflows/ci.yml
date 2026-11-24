@@ -10,7 +10,13 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # All three: the in-app updater runs a shell helper on macOS/Linux and a
+    # PowerShell helper on Windows, and test/self-update.test.js runs them for real.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -24,4 +30,5 @@ jobs:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
       - run: npm test
       - name: Syntax check main process
+        shell: bash
         run: for f in src/*.js; do node --check "$f"; done

@@ -16,7 +16,8 @@ const { Overlay } = require('./overlay');
 const { AppLock } = require('./lock');
 const { Dnd, HOUR } = require('./dnd');
 const { normalizeRules, MAX_RULES } = require('./focus');
-const { Updater, updateCommand } = require('./updater');
+const { Updater, updateCommand, downloadReleaseFile } = require('./updater');
+const selfUpdate = require('./self-update');
 const { SettingsWindow } = require('./settings-window');
 
 // Must match build.appId: Windows ties notifications to this ID.
@@ -518,7 +519,103 @@ function settingsState() {
 
 // ---------------------------------------------------------------- updates
 
+// In-app update: { version, state: 'downloading' | 'ready', prepared }.
+let update = null;
+let updateApplied = false;
+const SELF_UPDATING = new Set(['mac', 'win-zip', 'win-setup', 'appimage']);
+
+function selfUpdateInfo() {
+  return selfUpdate.installInfo({ isPackaged: app.isPackaged });
+}
+
 function showUpdate(release) {
+  if (update && update.version === release.version) {
+    if (update.state === 'ready') askRestartToUpdate();
+    return;
+  }
+  if (SELF_UPDATING.has(selfUpdateInfo().kind)) {
+    dialog.showMessageBox({
+      type: 'info',
+      message: 'Thrum update available',
+      detail: `Version ${release.version} is available (you have ${app.getVersion()}).\n\nThrum downloads it from this project's GitHub releases, checks its SHA-256 checksum, and installs it when it restarts. Your logins and settings are kept.`,
+      buttons: ['Update now', 'Release notes', 'Later'],
+      defaultId: 0,
+      cancelId: 2,
+    }).then(({ response }) => {
+      if (response === 0) installUpdate(release);
+      if (response === 1) openExternal(release.url);
+    });
+    return;
+  }
+  showManualUpdate(release);
+}
+
+async function installUpdate(release) {
+  if (update) return;
+  const info = selfUpdateInfo();
+  update = { version: release.version, state: 'downloading' };
+  rebuildMenus();
+  let dir = null;
+  try {
+    dir = selfUpdate.workDir(info);
+    const name = info.asset(release.version);
+    const file = path.join(dir, name);
+    await downloadReleaseFile(release.version, name, file, (f) => { if (mainWindow) mainWindow.setProgressBar(f); });
+    update.prepared = selfUpdate.prepare(info, file, dir);
+    update.state = 'ready';
+  } catch (err) {
+    update = null;
+    if (dir) fs.rmSync(dir, { recursive: true, force: true });
+    dialog.showMessageBox({
+      type: 'warning',
+      message: 'Could not update Thrum',
+      detail: `${err.message || err}\n\nNothing was changed. You can download the new version from the release page instead.`,
+      buttons: ['Open release page', 'Close'],
+      defaultId: 0,
+      cancelId: 1,
+    }).then(({ response }) => { if (response === 0) openExternal(release.url); });
+    return;
+  } finally {
+    if (mainWindow) mainWindow.setProgressBar(-1);
+    rebuildMenus();
+  }
+  askRestartToUpdate();
+}
+
+function askRestartToUpdate() {
+  dialog.showMessageBox({
+    type: 'info',
+    message: `Thrum ${update.version} is ready`,
+    detail: 'Restart now to finish updating. If you choose Later, it installs the next time you quit Thrum.',
+    buttons: ['Restart now', 'Later'],
+    defaultId: 0,
+    cancelId: 1,
+  }).then(({ response }) => { if (response === 0) restartToUpdate(); });
+}
+
+// Hands the prepared update to the helper that swaps it in after we exit.
+function applyPendingUpdate(relaunch) {
+  if (!update || update.state !== 'ready' || updateApplied) return;
+  updateApplied = true;
+  try {
+    selfUpdate.apply(update.prepared, { relaunch, relaunchApp: (opts) => app.relaunch(opts) });
+  } catch { /* keep the running version */ }
+}
+
+function restartToUpdate() {
+  applyPendingUpdate(true);
+  isQuitting = true;
+  app.quit();
+}
+
+function updateMenuItem() {
+  if (update && update.state === 'downloading') return { label: `Downloading Thrum ${update.version}…`, enabled: false };
+  if (update && update.state === 'ready') return { label: `Restart to update to ${update.version}`, click: () => restartToUpdate() };
+  if (updater && updater.available) return { label: `Update to ${updater.available.version}…`, click: () => showUpdate(updater.available) };
+  return null;
+}
+
+function showManualUpdate(release) {
   const cmd = updateCommand();
   const buttons = cmd ? ['Copy update command', 'Open release page', 'Later'] : ['Open release page', 'Later'];
   const detail = cmd
@@ -533,6 +630,7 @@ function showUpdate(release) {
 }
 
 async function checkForUpdatesNow() {
+  if (update && update.state === 'ready') { askRestartToUpdate(); return; }
   try {
     const release = await updater.check();
     if (!release) {
@@ -636,6 +734,7 @@ function buildAppMenu() {
       submenu: [
         { role: 'about' },
         { label: 'Check for Updates…', click: () => checkForUpdatesNow() },
+        ...(updateMenuItem() ? [updateMenuItem()] : []),
         { type: 'separator' },
         { label: 'Settings…', accelerator: 'Cmd+,', enabled: !locked, click: () => openSettings() },
         { type: 'separator' },
@@ -650,6 +749,7 @@ function buildAppMenu() {
       submenu: [
         { label: 'Settings…', accelerator: 'Ctrl+,', enabled: !locked, click: () => openSettings() },
         { label: 'Check for Updates…', click: () => checkForUpdatesNow() },
+        ...(updateMenuItem() ? [updateMenuItem()] : []),
         { type: 'separator' },
         { role: 'quit' },
       ],
@@ -719,7 +819,7 @@ function trayMenu() {
     { type: 'separator' },
     { label: 'Notifications', submenu: pauseItems() },
     ...(lock.enabled ? [{ label: 'Lock now', enabled: !lock.locked, click: () => lock.lock() }] : []),
-    ...(updater && updater.available ? [{ label: `Update to ${updater.available.version}…`, click: () => showUpdate(updater.available) }] : []),
+    ...(updateMenuItem() ? [updateMenuItem()] : []),
     { type: 'separator' },
     { label: 'Quit Thrum', click: () => { isQuitting = true; app.quit(); } },
   ];
@@ -855,6 +955,9 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on('before-quit', () => { isQuitting = true; });
-  app.on('will-quit', () => globalShortcut.unregisterAll());
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll();
+    applyPendingUpdate(false); // "Later": install on the way out
+  });
   app.on('window-all-closed', () => app.quit());
 }
