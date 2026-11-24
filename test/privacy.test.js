@@ -92,7 +92,7 @@ test('accounts never share a session', () => {
 
 test('update check: off by default, GitHub releases API only, no cookies', () => {
   const up = code('updater.js');
-  assert.ok(up.includes("const API_URL = 'https://api.github.com/repos/thangldw/facebook-messenger/releases/latest';"));
+  assert.ok(up.includes("const API_URL = 'https://api.github.com/repos/thangldw/thrum/releases/latest';"));
   const fetches = up.match(/net\.fetch\(([^,]+),/g) || [];
   assert.deepStrictEqual(fetches, ['net.fetch(API_URL,']);
   assert.match(up, /credentials: 'omit'/);

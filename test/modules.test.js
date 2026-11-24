@@ -153,7 +153,7 @@ test('updater: version comparison', () => {
 });
 
 test('updater: only well-formed releases from this repo are accepted', () => {
-  const good = { tag_name: 'v0.3.0', html_url: 'https://github.com/thangldw/facebook-messenger/releases/tag/v0.3.0' };
+  const good = { tag_name: 'v0.3.0', html_url: 'https://github.com/thangldw/thrum/releases/tag/v0.3.0' };
   assert.deepStrictEqual(parseRelease(good), { version: '0.3.0', url: good.html_url });
   assert.strictEqual(parseRelease({ ...good, html_url: 'https://evil.example/download' }), null);
   assert.strictEqual(parseRelease({ ...good, html_url: 'https://github.com/someone-else/facebook-messenger/releases/x' }), null);

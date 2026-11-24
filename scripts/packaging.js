@@ -3,7 +3,7 @@
 
 // Generates package-manager files from a release's SHA256SUMS.txt.
 //
-//   node scripts/packaging.js cask   <version> <SHA256SUMS.txt>            -> rewrites Casks/messenger-lite.rb
+//   node scripts/packaging.js cask   <version> <SHA256SUMS.txt>            -> rewrites Casks/thrum.rb
 //   node scripts/packaging.js winget <version> <SHA256SUMS.txt> <out-dir>  -> writes winget manifests
 //
 // Run by the release workflow; can also be run by hand.
@@ -11,7 +11,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const REPO = 'thangldw/facebook-messenger';
+const REPO = 'thangldw/thrum';
 const ROOT = path.join(__dirname, '..');
 
 function readSums(file) {
@@ -34,9 +34,9 @@ function checkVersion(version) {
 
 function cask(version, sumsFile) {
   const sums = readSums(sumsFile);
-  const arm = need(sums, `MessengerLite-${version}-mac-arm64.zip`);
-  const intel = need(sums, `MessengerLite-${version}-mac-x64.zip`);
-  const file = path.join(ROOT, 'Casks', 'messenger-lite.rb');
+  const arm = need(sums, `Thrum-${version}-mac-arm64.zip`);
+  const intel = need(sums, `Thrum-${version}-mac-x64.zip`);
+  const file = path.join(ROOT, 'Casks', 'thrum.rb');
   const src = fs.readFileSync(file, 'utf8')
     .replace(/^ {2}version "[^"]*"$/m, `  version "${version}"`)
     .replace(/^ {2}sha256 arm: {3}"[0-9a-f]*",$/m, `  sha256 arm:   "${arm}",`)
@@ -50,13 +50,13 @@ function cask(version, sumsFile) {
 
 function winget(version, sumsFile, outDir) {
   const sums = readSums(sumsFile);
-  const id = 'ThangLDW.MessengerLite';
-  const dir = path.join(outDir, 'manifests', 't', 'ThangLDW', 'MessengerLite', version);
+  const id = 'ThangLDW.Thrum';
+  const dir = path.join(outDir, 'manifests', 't', 'ThangLDW', 'Thrum', version);
   fs.mkdirSync(dir, { recursive: true });
   const base = `https://github.com/${REPO}/releases/download/v${version}`;
   const header = (kind) => `# yaml-language-server: $schema=https://aka.ms/winget-manifest.${kind}.1.6.0.schema.json\n`;
   const installer = (arch) => {
-    const name = `MessengerLite-${version}-win-${arch}-setup.exe`;
+    const name = `Thrum-${version}-win-${arch}-setup.exe`;
     return [
       `  - Architecture: ${arch}`,
       `    InstallerUrl: ${base}/${name}`,
@@ -88,12 +88,12 @@ PackageVersion: ${version}
 PackageLocale: en-US
 Publisher: Thang
 PublisherUrl: https://github.com/thangldw
-PackageName: Messenger Lite
+PackageName: Thrum
 PackageUrl: https://github.com/${REPO}
 License: MIT
 LicenseUrl: https://github.com/${REPO}/blob/main/LICENSE
 ShortDescription: Desktop app for Facebook Messenger with the News Feed blocked.
-Description: Messenger Lite wraps Facebook's own web client at facebook.com/messages in a desktop app, without the News Feed, Watch or Marketplace. It never sees or stores your password and sends no data anywhere but Facebook.
+Description: Thrum wraps Facebook's own web client at facebook.com/messages in a desktop app, without the News Feed, Watch or Marketplace. It never sees or stores your password and sends no data anywhere but Facebook.
 Tags:
   - chat
   - facebook

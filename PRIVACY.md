@@ -1,6 +1,6 @@
 # Privacy and security
 
-**Short answer:** Messenger Lite never sees, stores or sends your Facebook username or password. You type them into Facebook's own login page, which sends them straight to Facebook over HTTPS, exactly as in a browser. The app keeps only what a browser keeps to stay signed in (a session cookie, encrypted with your OS keychain) plus Facebook's own cache, all on your computer.
+**Short answer:** Thrum never sees, stores or sends your Facebook username or password. You type them into Facebook's own login page, which sends them straight to Facebook over HTTPS, exactly as in a browser. The app keeps only what a browser keeps to stay signed in (a session cookie, encrypted with your OS keychain) plus Facebook's own cache, all on your computer.
 
 This document explains what that claim rests on and how you can check each part yourself, without trusting the author.
 
@@ -10,9 +10,9 @@ Everything lives in one folder on your computer and nowhere else:
 
 | OS | Folder |
 |---|---|
-| macOS | `~/Library/Application Support/Messenger Lite/` |
-| Windows | `%APPDATA%\Messenger Lite\` |
-| Linux | `~/.config/Messenger Lite/` |
+| macOS | `~/Library/Application Support/Thrum/` |
+| Windows | `%APPDATA%\Thrum\` |
+| Linux | `~/.config/Thrum/` |
 
 | What | Where in that folder | Stored? |
 |---|---|---|
@@ -51,7 +51,7 @@ The whole app is three short files in [`src/`](src/) with no runtime dependencie
 Every release file is built by GitHub Actions from a tagged commit and comes with a signed [build provenance attestation](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations). With the [GitHub CLI](https://cli.github.com/):
 
 ```bash
-gh attestation verify MessengerLite-0.1.0-mac-arm64.zip --repo thangldw/facebook-messenger
+gh attestation verify Thrum-0.1.0-mac-arm64.zip --repo thangldw/thrum
 ```
 
 A successful check proves the file was produced by this repository's release workflow and has not been modified since. The install scripts also check every download against the release's `SHA256SUMS.txt`.
@@ -67,21 +67,21 @@ ls ~/Library/Application\ Support/Messenger\ Lite/Partitions/messenger | grep -E
 
 ```powershell
 # Windows
-Get-ChildItem "$env:APPDATA\Messenger Lite\Partitions\messenger" | Where-Object Name -match 'Login Data|Web Data'
+Get-ChildItem "$env:APPDATA\Thrum\Partitions\messenger" | Where-Object Name -match 'Login Data|Web Data'
 ```
 
 ### 3. Cookies are encrypted at rest
 
 ```bash
 # macOS: count facebook.com cookies stored encrypted vs. plaintext (shows counts only)
-sqlite3 "file:$HOME/Library/Application Support/Messenger Lite/Partitions/messenger/Cookies?immutable=1" \
+sqlite3 "file:$HOME/Library/Application Support/Thrum/Partitions/messenger/Cookies?immutable=1" \
   "select sum(length(encrypted_value)>0) as encrypted, sum(length(value)>0) as plaintext from cookies where host_key like '%facebook.com'"
 ```
 
 On a fresh install, expect `plaintext` to be `0` (or empty). If you signed in with a build from before v0.1.0, cookies are encrypted as Facebook rewrites them; the login cookies (`c_user`, `xs`) are rewritten on the first launch, and Account → **Log out and clear data…** followed by signing in again encrypts all of them at once. You can also confirm the fuses on the installed app:
 
 ```bash
-npx @electron/fuses read --app "$HOME/Applications/Messenger Lite.app"
+npx @electron/fuses read --app "$HOME/Applications/Thrum.app"
 # EnableCookieEncryption is Enabled, RunAsNode is Disabled, ...
 ```
 
@@ -113,4 +113,4 @@ The lock hides the app's window behind the lock screen, withholds notifications 
 
 ## macOS Keychain prompt
 
-Cookie encryption stores its key in your Keychain as "Messenger Lite Safe Storage". Because builds are not signed with a paid Apple certificate, macOS may ask "Messenger Lite wants to use your confidential information…" after you install an update. Choose **Always Allow**. If you deny it, the app cannot read its cookies and you will be asked to sign in again.
+Cookie encryption stores its key in your Keychain as "Thrum Safe Storage". Because builds are not signed with a paid Apple certificate, macOS may ask "Thrum wants to use your confidential information…" after you install an update. Choose **Always Allow**. If you deny it, the app cannot read its cookies and you will be asked to sign in again.

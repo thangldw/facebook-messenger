@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Messenger Lite</title>
+  <title>Thrum</title>
   <link rel="stylesheet" href="overlay.css">
 </head>
 <body>
@@ -15,7 +15,7 @@
     </svg>
 
     <section data-mode="lock" hidden>
-      <h1>Messenger Lite is locked</h1>
+      <h1>Thrum is locked</h1>
       <form id="unlock-form" autocomplete="off">
         <label class="sr" for="unlock-password">Password</label>
         <input id="unlock-password" type="password" placeholder="Password" maxlength="256" autocomplete="current-password" required>
@@ -28,7 +28,7 @@
 
     <section data-mode="setup" hidden>
       <h1>Set an app password</h1>
-      <p class="muted">You'll need it to open Messenger Lite. It is stored only as a salted hash on this computer.</p>
+      <p class="muted">You'll need it to open Thrum. It is stored only as a salted hash on this computer.</p>
       <form id="setup-form" autocomplete="off">
         <label class="sr" for="setup-password">New password</label>
         <input id="setup-password" type="password" placeholder="New password (4+ characters)" minlength="4" maxlength="256" autocomplete="new-password" required>
@@ -44,7 +44,7 @@
 
     <section data-mode="offline" hidden>
       <h1>Can't reach Facebook</h1>
-      <p class="muted">Check your internet connection. Messenger Lite will reconnect automatically.</p>
+      <p class="muted">Check your internet connection. Thrum will reconnect automatically.</p>
       <p class="status"><span class="spinner" aria-hidden="true"></span><span id="offline-status">Retrying…</span></p>
       <button id="offline-retry" type="button" class="primary">Try now</button>
     </section>

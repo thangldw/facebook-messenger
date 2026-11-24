@@ -1,10 +1,12 @@
-# Messenger Lite
+# Thrum
 
-A personal desktop app for Facebook Messenger on macOS, Windows and Linux, so you can chat without opening Facebook in a browser.
+A quiet desktop app for your Facebook messages on macOS, Windows and Linux: chat without opening Facebook in a browser, and without the feed.
+
+*Formerly Messenger Lite.* The app was renamed in v0.3.0 so it is not confused with Meta's own products. Updating with the install command or Homebrew replaces the old app and keeps your settings and accounts; on macOS you sign in to Facebook once more, because the cookie key in the Keychain was stored under the old name.
 
 It wraps Facebook's own web client at `facebook.com/messages` (messenger.com was shut down in April 2026 and now redirects there). There is no reverse-engineered protocol and no unofficial API, so it behaves exactly like Messenger in a browser, minus the rest of Facebook.
 
-> Not affiliated with or endorsed by Meta. "Facebook" and "Messenger" are trademarks of Meta Platforms, Inc.
+> Thrum is an independent project, not affiliated with or endorsed by Meta. "Facebook" and "Messenger" are trademarks of Meta Platforms, Inc., used here only to describe what the app works with.
 
 ## Features
 
@@ -38,64 +40,64 @@ Ready-to-run builds, nothing to compile. The one-line installers download the la
 **macOS** (Apple Silicon and Intel), in Terminal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/thangldw/facebook-messenger/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/thangldw/thrum/main/install.sh | bash
 ```
 
-Installs to `~/Applications/Messenger Lite.app`.
+Installs to `~/Applications/Thrum.app`.
 
 Or with **Homebrew**:
 
 ```bash
-brew tap thangldw/messenger-lite https://github.com/thangldw/facebook-messenger
-brew install --cask thangldw/messenger-lite/messenger-lite
-# update later: brew upgrade --cask thangldw/messenger-lite/messenger-lite
+brew tap thangldw/thrum https://github.com/thangldw/thrum
+brew install --cask thangldw/thrum/thrum
+# update later: brew upgrade --cask thangldw/thrum/thrum
 ```
 
 **Windows 10/11** (x64 and ARM), in PowerShell (no admin needed, no installer `.exe`):
 
 ```powershell
-irm https://raw.githubusercontent.com/thangldw/facebook-messenger/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/thangldw/thrum/main/install.ps1 | iex
 ```
 
-Installs to `%LOCALAPPDATA%\Programs\Messenger Lite` and adds a Start menu shortcut. Once the package is accepted into the winget repository you can also use `winget install ThangLDW.MessengerLite`.
+Installs to `%LOCALAPPDATA%\Programs\Thrum` and adds a Start menu shortcut. Once the package is accepted into the winget repository you can also use `winget install ThangLDW.Thrum`.
 
-**Linux** (Debian/Ubuntu), download the `.deb` from the [latest release](https://github.com/thangldw/facebook-messenger/releases/latest) and run `sudo apt install ./MessengerLite-<ver>-linux-amd64.deb`; other distributions can use the AppImage.
+**Linux** (Debian/Ubuntu), download the `.deb` from the [latest release](https://github.com/thangldw/thrum/releases/latest) and run `sudo apt install ./Thrum-<ver>-linux-amd64.deb`; other distributions can use the AppImage.
 
 The scripts are short; read [install.sh](install.sh) / [install.ps1](install.ps1) before running them if you like.
 
 ### Manual download
 
-Or download a file from the [latest release](https://github.com/thangldw/facebook-messenger/releases/latest):
+Or download a file from the [latest release](https://github.com/thangldw/thrum/releases/latest):
 
 | System | File |
 |---|---|
-| macOS (Apple Silicon) | `MessengerLite-<ver>-mac-arm64.dmg` or `.zip` |
-| macOS (Intel) | `MessengerLite-<ver>-mac-x64.dmg` or `.zip` |
-| Windows (x64 / ARM) | `MessengerLite-<ver>-win-x64.zip` / `-win-arm64.zip` (unzip, run `Messenger Lite.exe`) or `MessengerLite-<ver>-win-x64-setup.exe` / `-win-arm64-setup.exe` (installer) |
-| Linux | `MessengerLite-<ver>-linux-amd64.deb` or `MessengerLite-<ver>-linux-x86_64.AppImage` (`chmod +x`, then run) |
+| macOS (Apple Silicon) | `Thrum-<ver>-mac-arm64.dmg` or `.zip` |
+| macOS (Intel) | `Thrum-<ver>-mac-x64.dmg` or `.zip` |
+| Windows (x64 / ARM) | `Thrum-<ver>-win-x64.zip` / `-win-arm64.zip` (unzip, run `Thrum.exe`) or `Thrum-<ver>-win-x64-setup.exe` / `-win-arm64-setup.exe` (installer) |
+| Linux | `Thrum-<ver>-linux-amd64.deb` or `Thrum-<ver>-linux-x86_64.AppImage` (`chmod +x`, then run) |
 
 Files downloaded with a browser are flagged by the OS because the builds are not signed with a paid certificate:
 
-- **macOS 15 and later:** open the app once (it is blocked), then go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. Alternatively run `xattr -dr com.apple.quarantine "/Applications/Messenger Lite.app"`.
+- **macOS 15 and later:** open the app once (it is blocked), then go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. Alternatively run `xattr -dr com.apple.quarantine "/Applications/Thrum.app"`.
 - **Windows SmartScreen:** click **More info → Run anyway**. For the zip, right-click it → Properties → **Unblock** before extracting.
 
 `SHA256SUMS.txt` in each release lists the checksums, and every file has a GitHub build attestation; see [PRIVACY.md](PRIVACY.md#1-the-download-is-built-from-this-source-code) for how to verify them.
 
 ### First launch
 
-Sign in to Facebook in the app window. If you use end-to-end encrypted chats, Messenger may ask for your PIN to restore your history, the same as in a browser. On macOS, allow the Keychain prompt for "Messenger Lite Safe Storage" (used to encrypt the session cookie) with **Always Allow**.
+Sign in to Facebook in the app window. If you use end-to-end encrypted chats, Messenger may ask for your PIN to restore your history, the same as in a browser. On macOS, allow the Keychain prompt for "Thrum Safe Storage" (used to encrypt the session cookie) with **Always Allow**.
 
 ### Uninstall
 
 Quit the app, then delete:
 
-- **macOS:** `~/Applications/Messenger Lite.app` and `~/Library/Application Support/Messenger Lite` (Homebrew: `brew uninstall --zap --cask thangldw/messenger-lite/messenger-lite`)
-- **Windows:** `%LOCALAPPDATA%\Programs\Messenger Lite`, `%APPDATA%\Messenger Lite` and the Start menu shortcut (or use *Apps & features* if you used the setup `.exe`)
-- **Linux:** `sudo apt remove messenger-lite` and `~/.config/Messenger Lite`
+- **macOS:** `~/Applications/Thrum.app` and `~/Library/Application Support/Thrum` (Homebrew: `brew uninstall --zap --cask thangldw/thrum/thrum`)
+- **Windows:** `%LOCALAPPDATA%\Programs\Thrum`, `%APPDATA%\Thrum` and the Start menu shortcut (or use *Apps & features* if you used the setup `.exe`)
+- **Linux:** `sudo apt remove thrum` and `~/.config/Thrum`
 
 ### Calls on macOS
 
-macOS asks for microphone and camera access the first time you join a call. Screen sharing additionally needs **System Settings → Privacy & Security → Screen & System Audio Recording** enabled for Messenger Lite; restart the app after granting it.
+macOS asks for microphone and camera access the first time you join a call. Screen sharing additionally needs **System Settings → Privacy & Security → Screen & System Audio Recording** enabled for Thrum; restart the app after granting it.
 
 ## Build from source
 
@@ -122,7 +124,7 @@ git push --follow-tags     # CI builds mac/win/linux and publishes the release
 
 The workflow fails if the tag does not match the `version` in `package.json`. It smoke-tests the installers on each OS, publishes the release with `SHA256SUMS.txt` and build attestations, updates the Homebrew cask in `Casks/`, then installs from the published release every supported way (install.sh, Homebrew, install.ps1 on x64 and on a Windows ARM runner, apt) to confirm they work. Running it manually from the Actions tab builds and smoke-tests the installers as workflow artifacts without publishing.
 
-**winget:** each release includes `MessengerLite-<ver>-winget-manifests.zip`. The first submission to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) is manual (`wingetcreate submit <manifest folder>`); after it is accepted, add a repository secret `WINGET_TOKEN` (a GitHub token with `public_repo` scope) and every later release is submitted automatically.
+**winget:** each release includes `Thrum-<ver>-winget-manifests.zip`. The first submission to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) is manual (`wingetcreate submit <manifest folder>`); after it is accepted, add a repository secret `WINGET_TOKEN` (a GitHub token with `public_repo` scope) and every later release is submitted automatically.
 
 ## How it works
 
@@ -162,7 +164,7 @@ If a login, security or call step ever gets sent to your browser, add its path p
 - On Windows and Linux, clicking a notification may not bring a hidden window to the front; use the tray icon or the global shortcut.
 - With several accounts, notifications do not say which account they belong to, and clicking one does not switch accounts: the app does not read Facebook's pages, so it cannot see the account name. The tray and *Accounts* menu show unread counts per account.
 - Spellcheck is macOS-only: on Windows and Linux Electron would download dictionaries from Google, so it is off to keep traffic Facebook-only.
-- No automatic installs of updates; turn on *Settings → Check for updates automatically* to be told about new versions, then re-run the install command (or `brew upgrade --cask thangldw/messenger-lite/messenger-lite`).
+- No automatic installs of updates; turn on *Settings → Check for updates automatically* to be told about new versions, then re-run the install command (or `brew upgrade --cask thangldw/thrum/thrum`).
 - Builds are not signed with paid Apple/Microsoft certificates; the install scripts avoid the resulting warnings, browser downloads do not.
 
 ## License

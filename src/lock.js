@@ -66,7 +66,7 @@ class AppLock {
   async tryTouchId() {
     if (!this.locked || !this.touchIdAvailable()) return { ok: false };
     try {
-      await systemPreferences.promptTouchID('unlock Messenger Lite');
+      await systemPreferences.promptTouchID('unlock Thrum');
       this.unlockNow();
       return { ok: true };
     } catch {

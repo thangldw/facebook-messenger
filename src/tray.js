@@ -25,7 +25,7 @@ class AppTray {
       ? { normal: load('trayTemplate'), unread: load('trayUnreadTemplate') }
       : { normal: load('tray'), unread: load('trayUnread') };
     this.tray = new Tray(this.icons.normal);
-    this.tray.setToolTip('Messenger Lite');
+    this.tray.setToolTip('Thrum');
     // Left click toggles the window; right click (or click on macOS with a
     // modifier) shows the menu. On Linux most trays only support the menu.
     this.tray.on('click', () => this.handlers.toggleWindow());
@@ -46,7 +46,7 @@ class AppTray {
     this.unread = count;
     this.tray.setImage(count > 0 ? this.icons.unread : this.icons.normal);
     if (isMac) this.tray.setTitle(count > 0 ? String(count) : '', { fontType: 'monospacedDigit' });
-    const parts = ['Messenger Lite'];
+    const parts = ['Thrum'];
     if (count > 0) parts.push(`${count} unread`);
     if (paused) parts.push('notifications paused');
     this.tray.setToolTip(parts.join(' — '));

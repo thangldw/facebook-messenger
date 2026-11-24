@@ -8,8 +8,8 @@
 const { app, net } = require('electron');
 const fs = require('fs');
 
-const API_URL = 'https://api.github.com/repos/thangldw/facebook-messenger/releases/latest';
-const RELEASES_URL = 'https://github.com/thangldw/facebook-messenger/releases/';
+const API_URL = 'https://api.github.com/repos/thangldw/thrum/releases/latest';
+const RELEASES_URL = 'https://github.com/thangldw/thrum/releases/';
 const DAY = 24 * 60 * 60 * 1000;
 
 function parseVersion(v) {
@@ -36,13 +36,13 @@ function parseRelease(json) {
 
 function updateCommand() {
   if (process.platform === 'darwin') {
-    const brew = ['/opt/homebrew/Caskroom/messenger-lite', '/usr/local/Caskroom/messenger-lite'].some((p) => fs.existsSync(p));
+    const brew = ['/opt/homebrew/Caskroom/thrum', '/usr/local/Caskroom/thrum'].some((p) => fs.existsSync(p));
     return brew
-      ? 'brew upgrade --cask thangldw/messenger-lite/messenger-lite'
-      : 'curl -fsSL https://raw.githubusercontent.com/thangldw/facebook-messenger/main/install.sh | bash';
+      ? 'brew upgrade --cask thangldw/thrum/thrum'
+      : 'curl -fsSL https://raw.githubusercontent.com/thangldw/thrum/main/install.sh | bash';
   }
   if (process.platform === 'win32') {
-    return 'irm https://raw.githubusercontent.com/thangldw/facebook-messenger/main/install.ps1 | iex';
+    return 'irm https://raw.githubusercontent.com/thangldw/thrum/main/install.ps1 | iex';
   }
   return null;
 }
@@ -66,7 +66,7 @@ class Updater {
   // Throws on network/HTTP errors (shown to the user for manual checks).
   async check() {
     const res = await net.fetch(API_URL, {
-      headers: { Accept: 'application/vnd.github+json', 'User-Agent': `MessengerLite/${app.getVersion()}` },
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': `Thrum/${app.getVersion()}` },
       credentials: 'omit',
       cache: 'no-store',
     });

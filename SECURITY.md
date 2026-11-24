@@ -6,7 +6,7 @@ Only the latest release is supported. Each release ships the Electron (Chromium)
 
 ## Reporting a vulnerability
 
-Please report privately via GitHub: **Security → Report a vulnerability** on this repository ([private advisory](https://github.com/thangldw/facebook-messenger/security/advisories/new)). Do not open a public issue for security problems.
+Please report privately via GitHub: **Security → Report a vulnerability** on this repository ([private advisory](https://github.com/thangldw/thrum/security/advisories/new)). Do not open a public issue for security problems.
 
 Useful to include: affected version and OS, steps to reproduce, and the impact you expect.
 

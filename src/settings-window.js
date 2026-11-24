@@ -42,7 +42,7 @@ class SettingsWindow {
       height: 680,
       minWidth: 420,
       minHeight: 400,
-      title: 'Messenger Lite Settings',
+      title: 'Thrum Settings',
       backgroundColor: '#111214',
       autoHideMenuBar: true,
       parent: process.platform === 'darwin' ? undefined : parent,

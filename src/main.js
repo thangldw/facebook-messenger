@@ -4,6 +4,7 @@ const {
   app, BaseWindow, Menu, shell, session, dialog, globalShortcut, Notification, clipboard, nativeImage,
 } = require('electron');
 const crypto = require('crypto');
+const fs = require('fs');
 const path = require('path');
 const { classify, isFacebookUrl, downloadTarget, HOME_URL } = require('./routes');
 const { handleDisplayMediaRequest } = require('./screen-share');
@@ -19,7 +20,7 @@ const { Updater, updateCommand } = require('./updater');
 const { SettingsWindow } = require('./settings-window');
 
 // Must match build.appId: Windows ties notifications to this ID.
-const APP_ID = 'local.personal.messenger-lite';
+const APP_ID = 'io.github.thangldw.thrum';
 const isMac = process.platform === 'darwin';
 const isWin = process.platform === 'win32';
 const FB_ORIGIN = 'https://www.facebook.com';
@@ -46,6 +47,20 @@ const DEBUG_SWITCHES = ['remote-debugging-port', 'remote-debugging-pipe', 'remot
 if (app.isPackaged && DEBUG_SWITCHES.some((s) => app.commandLine.hasSwitch(s))) {
   app.exit(1);
 }
+
+// Up to v0.2 the app was called "Messenger Lite". Move its data folder
+// (settings, accounts, app-lock hash, sessions) to the new name before
+// anything creates the new one. On Windows and Linux the cookie key moves
+// with the folder, so logins survive; on macOS it is in the Keychain under the
+// old name, so Facebook asks you to sign in once.
+function migrateFromMessengerLite() {
+  try {
+    const target = app.getPath('userData');
+    const legacy = path.join(app.getPath('appData'), 'Messenger Lite');
+    if (!fs.existsSync(target) && fs.existsSync(legacy)) fs.renameSync(legacy, target);
+  } catch { /* start with a fresh profile */ }
+}
+migrateFromMessengerLite();
 
 let settings;
 let ephemeral = false;
@@ -154,7 +169,7 @@ function updateTitle() {
   if (!mainWindow) return;
   const total = totalUnread();
   const name = accounts.size > 1 && active() ? ` — ${active().name}` : '';
-  mainWindow.setTitle(`${total > 0 ? `(${total}) ` : ''}Messenger Lite${name}`);
+  mainWindow.setTitle(`${total > 0 ? `(${total}) ` : ''}Thrum${name}`);
 }
 
 function onUnread() {
@@ -406,7 +421,7 @@ async function logOutActive() {
 // password is to wipe every account's session and the lock together.
 async function resetEverything() {
   const ok = await confirm(
-    'Log out and reset Messenger Lite?',
+    'Log out and reset Thrum?',
     'This deletes the Facebook sessions and data of all accounts in this app and turns off the app lock. You will need to sign in to Facebook again.',
     'Log out and reset',
   );
@@ -421,8 +436,8 @@ async function setEphemeral(on) {
   const ok = await confirm(
     on ? 'Turn on private mode?' : 'Turn off private mode?',
     on
-      ? 'Nothing is written to disk: all accounts are logged out whenever you quit. This also logs them out now and deletes the data stored so far. Messenger Lite will restart.'
-      : 'Logins and Facebook cache will be kept between launches again. Messenger Lite will restart.',
+      ? 'Nothing is written to disk: all accounts are logged out whenever you quit. This also logs them out now and deletes the data stored so far. Thrum will restart.'
+      : 'Logins and Facebook cache will be kept between launches again. Thrum will restart.',
     'Restart',
   );
   if (!ok) { rebuildMenus(); return; }
@@ -442,8 +457,8 @@ function setOpenAtLogin(on) {
   if (isMac && on && app.getLoginItemSettings().status === 'requires-approval') {
     dialog.showMessageBox({
       type: 'info',
-      message: 'Allow Messenger Lite to open at login',
-      detail: 'macOS needs your approval: System Settings → General → Login Items, then turn on Messenger Lite.',
+      message: 'Allow Thrum to open at login',
+      detail: 'macOS needs your approval: System Settings → General → Login Items, then turn on Thrum.',
     });
   }
   rebuildMenus();
@@ -499,7 +514,7 @@ function showUpdate(release) {
   const detail = cmd
     ? `Version ${release.version} is available (you have ${app.getVersion()}).\n\nTo update, run this in ${isWin ? 'PowerShell' : 'Terminal'}:\n${cmd}`
     : `Version ${release.version} is available (you have ${app.getVersion()}).`;
-  dialog.showMessageBox({ type: 'info', message: 'Messenger Lite update available', detail, buttons, defaultId: 0, cancelId: buttons.length - 1 })
+  dialog.showMessageBox({ type: 'info', message: 'Thrum update available', detail, buttons, defaultId: 0, cancelId: buttons.length - 1 })
     .then(({ response }) => {
       const action = buttons[response];
       if (action === 'Copy update command') clipboard.writeText(cmd);
@@ -511,7 +526,7 @@ async function checkForUpdatesNow() {
   try {
     const release = await updater.check();
     if (!release) {
-      dialog.showMessageBox({ type: 'info', message: 'Messenger Lite is up to date', detail: `Version ${app.getVersion()} is the latest.` });
+      dialog.showMessageBox({ type: 'info', message: 'Thrum is up to date', detail: `Version ${app.getVersion()} is the latest.` });
     } else {
       showUpdate(release);
     }
@@ -523,7 +538,7 @@ async function checkForUpdatesNow() {
 function onUpdateAvailable(release) {
   rebuildMenus();
   if (Notification.isSupported()) {
-    const n = new Notification({ title: 'Messenger Lite update available', body: `Version ${release.version} is ready to install.` });
+    const n = new Notification({ title: 'Thrum update available', body: `Version ${release.version} is ready to install.` });
     n.on('click', () => showUpdate(release));
     n.show();
   }
@@ -684,10 +699,10 @@ function buildAppMenu() {
 }
 
 function trayMenu() {
-  if (!lock || !dnd) return [{ label: 'Open Messenger Lite', click: () => showWindow() }];
+  if (!lock || !dnd) return [{ label: 'Open Thrum', click: () => showWindow() }];
   const total = totalUnread();
   return [
-    { label: 'Open Messenger Lite', click: () => showWindow() },
+    { label: 'Open Thrum', click: () => showWindow() },
     ...(accounts.size > 1
       ? [{ type: 'separator' }, ...accountSwitchItems({ withShortcuts: false })]
       : total > 0 ? [{ label: `${total} unread`, enabled: false }] : []),
@@ -696,7 +711,7 @@ function trayMenu() {
     ...(lock.enabled ? [{ label: 'Lock now', enabled: !lock.locked, click: () => lock.lock() }] : []),
     ...(updater && updater.available ? [{ label: `Update to ${updater.available.version}…`, click: () => showUpdate(updater.available) }] : []),
     { type: 'separator' },
-    { label: 'Quit Messenger Lite', click: () => { isQuitting = true; app.quit(); } },
+    { label: 'Quit Thrum', click: () => { isQuitting = true; app.quit(); } },
   ];
 }
 
@@ -713,12 +728,12 @@ function rebuildMenus() {
 // creates (or refreshes) its own.
 function ensureWindowsShortcut() {
   if (!isWin || !app.isPackaged) return;
-  const lnk = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Messenger Lite.lnk');
+  const lnk = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Thrum.lnk');
   shell.writeShortcutLink(lnk, 'create', {
     target: process.execPath,
     cwd: path.dirname(process.execPath),
     appUserModelId: APP_ID,
-    description: 'Messenger Lite',
+    description: 'Thrum',
     icon: process.execPath,
     iconIndex: 0,
   });
@@ -747,7 +762,7 @@ function createWindow({ show }) {
     minWidth: 480,
     minHeight: 400,
     show,
-    title: 'Messenger Lite',
+    title: 'Thrum',
     backgroundColor: '#111214',
     autoHideMenuBar: true,
   });
@@ -763,7 +778,7 @@ function createWindow({ show }) {
     e.preventDefault();
     mainWindow.hide();
     if (isWin && !settings.get('trayHintShown')) {
-      tray.displayBalloon('Messenger Lite is still running', 'It keeps notifying you about new messages. Quit from the tray icon.');
+      tray.displayBalloon('Thrum is still running', 'It keeps notifying you about new messages. Quit from the tray icon.');
       settings.set('trayHintShown', true);
     }
   });

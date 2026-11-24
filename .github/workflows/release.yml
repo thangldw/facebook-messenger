@@ -65,8 +65,8 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           zip=$(ls dist/*-mac-arm64.zip)
-          MESSENGER_LITE_ZIP="$zip" MESSENGER_LITE_DIR="$RUNNER_TEMP/apps" MESSENGER_LITE_NO_OPEN=1 ./install.sh
-          app="$RUNNER_TEMP/apps/Messenger Lite.app"
+          THRUM_ZIP="$zip" THRUM_DIR="$RUNNER_TEMP/apps" THRUM_NO_OPEN=1 ./install.sh
+          app="$RUNNER_TEMP/apps/Thrum.app"
           codesign --verify --deep --strict "$app"
           npx --yes @electron/fuses read --app "$app" | tee fuses.txt
           grep -q "EnableCookieEncryption is Enabled" fuses.txt
@@ -76,12 +76,12 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          $env:MESSENGER_LITE_ZIP = (Get-ChildItem dist\*-win-x64.zip).FullName
-          $env:MESSENGER_LITE_DIR = Join-Path $env:RUNNER_TEMP 'apps\Messenger Lite'
-          $env:MESSENGER_LITE_NO_OPEN = '1'
+          $env:THRUM_ZIP = (Get-ChildItem dist\*-win-x64.zip).FullName
+          $env:THRUM_DIR = Join-Path $env:RUNNER_TEMP 'apps\Thrum'
+          $env:THRUM_NO_OPEN = '1'
           .\install.ps1
-          if (-not (Test-Path (Join-Path $env:MESSENGER_LITE_DIR 'Messenger Lite.exe'))) { throw 'exe missing after install' }
-          if (-not (Test-Path (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Messenger Lite.lnk'))) { throw 'Start menu shortcut missing' }
+          if (-not (Test-Path (Join-Path $env:THRUM_DIR 'Thrum.exe'))) { throw 'exe missing after install' }
+          if (-not (Test-Path (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Thrum.lnk'))) { throw 'Start menu shortcut missing' }
 
       - name: Check the ARM64 build really is ARM64
         if: runner.os == 'Windows'
@@ -89,7 +89,7 @@ jobs:
         run: |
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $zip = [IO.Compression.ZipFile]::OpenRead((Get-ChildItem dist\*-win-arm64.zip).FullName)
-          $s = $zip.GetEntry('Messenger Lite.exe').Open(); $b = New-Object byte[] 4096; [void]$s.Read($b, 0, 4096); $s.Close(); $zip.Dispose()
+          $s = $zip.GetEntry('Thrum.exe').Open(); $b = New-Object byte[] 4096; [void]$s.Read($b, 0, 4096); $s.Close(); $zip.Dispose()
           $pe = [BitConverter]::ToInt32($b, 0x3c); $machine = [BitConverter]::ToUInt16($b, $pe + 4)
           if ($machine -ne 0xAA64) { throw ('ARM64 build has machine type 0x{0:X}' -f $machine) }
 
@@ -101,19 +101,19 @@ jobs:
           Get-ChildItem dist\*-setup.exe | ForEach-Object { "{0}  {1}" -f (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower(), $_.Name } | Set-Content -Encoding ascii setup-sums.txt
           node scripts/packaging.js winget $version setup-sums.txt winget-out
           if (Get-Command winget -ErrorAction SilentlyContinue) {
-            winget validate --manifest "winget-out\manifests\t\ThangLDW\MessengerLite\$version"
+            winget validate --manifest "winget-out\manifests\t\ThangLDW\Thrum\$version"
             if ($LASTEXITCODE -ne 0) { throw 'winget validate failed' }
           } else { Write-Warning 'winget is not available on this runner; manifests not validated' }
-          Compress-Archive -Path winget-out\manifests -DestinationPath "dist\MessengerLite-$version-winget-manifests.zip"
+          Compress-Archive -Path winget-out\manifests -DestinationPath "dist\Thrum-$version-winget-manifests.zip"
 
       - name: Smoke-test the .deb (install, run, remove)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ./dist/*.deb xvfb
-          test -x "/opt/Messenger Lite/messenger-lite"
-          timeout 20 xvfb-run -a "/opt/Messenger Lite/messenger-lite" --no-sandbox --disable-gpu || [ $? -eq 124 ]
-          sudo apt-get remove -y -qq messenger-lite
+          test -x "/opt/Thrum/thrum"
+          timeout 20 xvfb-run -a "/opt/Thrum/thrum" --no-sandbox --disable-gpu || [ $? -eq 124 ]
+          sudo apt-get remove -y -qq thrum
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -151,7 +151,7 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* \
             --repo "$GITHUB_REPOSITORY" \
-            --title "Messenger Lite $GITHUB_REF_NAME" \
+            --title "Thrum $GITHUB_REF_NAME" \
             --generate-notes
 
   # Points the Homebrew cask at the new release (the repo doubles as the tap).
@@ -164,7 +164,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: main
-      - name: Update Casks/messenger-lite.rb
+      - name: Update Casks/thrum.rb
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -193,7 +193,7 @@ jobs:
           gh release download $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --pattern '*-winget-manifests.zip' --dir dl
           Expand-Archive dl\*.zip -DestinationPath wm
           Invoke-WebRequest -UseBasicParsing https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
-          .\wingetcreate.exe submit --token $env:WINGET_TOKEN "wm\manifests\t\ThangLDW\MessengerLite\$version"
+          .\wingetcreate.exe submit --token $env:WINGET_TOKEN "wm\manifests\t\ThangLDW\Thrum\$version"
 
   verify-release:
     needs: [release, homebrew]
