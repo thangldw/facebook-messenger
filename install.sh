@@ -96,6 +96,13 @@ main() {
     for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -f "$LEGACY_NAME.app/Contents/MacOS/" >/dev/null 2>&1 || break; sleep 1; done
     mv "$dest/$LEGACY_NAME.app" "$HOME/.Trash/$LEGACY_NAME $(date +%Y%m%d-%H%M%S).app" 2>/dev/null || true
   fi
+  # Carry the old data folder over before Thrum first runs (the app also does
+  # this itself, but only while its own folder is still empty).
+  local support="$HOME/Library/Application Support"
+  if [ -d "$support/$LEGACY_NAME" ] && { [ ! -d "$support/$APP_NAME" ] || [ -z "$(ls -A "$support/$APP_NAME")" ]; }; then
+    rmdir "$support/$APP_NAME" 2>/dev/null || true
+    mv "$support/$LEGACY_NAME" "$support/$APP_NAME"
+  fi
 
   mkdir -p "$dest"
   rm -rf "$dest/$APP_NAME.app"

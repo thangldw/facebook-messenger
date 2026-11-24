@@ -91,6 +91,14 @@
     }
     $legacyLnk = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\$LegacyName.lnk"
     if (Test-Path $legacyLnk) { Remove-Item -Force $legacyLnk }
+    # Carry the old data folder (settings, accounts, logins) over before Thrum
+    # first runs; the app also does this itself while its own folder is empty.
+    $legacyData = Join-Path $env:APPDATA $LegacyName
+    $newData = Join-Path $env:APPDATA $AppName
+    if ((Test-Path $legacyData) -and (-not (Test-Path $newData) -or -not (Get-ChildItem -Force $newData | Select-Object -First 1))) {
+      if (Test-Path $newData) { Remove-Item -Force $newData }
+      Move-Item -Path $legacyData -Destination $newData
+    }
 
     $running = Get-Process -Name $AppName -ErrorAction SilentlyContinue
     if ($running) {

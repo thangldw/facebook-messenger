@@ -53,11 +53,18 @@ if (app.isPackaged && DEBUG_SWITCHES.some((s) => app.commandLine.hasSwitch(s))) 
 // anything creates the new one. On Windows and Linux the cookie key moves
 // with the folder, so logins survive; on macOS it is in the Keychain under the
 // old name, so Facebook asks you to sign in once.
+// Electron creates the (empty) new folder before this code runs, so "empty"
+// counts as unused; Chromium only writes into it later in startup.
 function migrateFromMessengerLite() {
   try {
     const target = app.getPath('userData');
     const legacy = path.join(app.getPath('appData'), 'Messenger Lite');
-    if (!fs.existsSync(target) && fs.existsSync(legacy)) fs.renameSync(legacy, target);
+    if (!fs.existsSync(legacy)) return;
+    if (fs.existsSync(target)) {
+      if (fs.readdirSync(target).length > 0) return; // already in use: keep it
+      fs.rmdirSync(target);
+    }
+    fs.renameSync(legacy, target);
   } catch { /* start with a fresh profile */ }
 }
 migrateFromMessengerLite();
