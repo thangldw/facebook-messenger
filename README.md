@@ -12,7 +12,7 @@ It wraps Facebook's own web client at `facebook.com/messages` (messenger.com was
 - **Voice and video calls**, including the call window, which stays in-app so it shares your login.
 - **Screen sharing** in calls: the native picker on macOS 15+, and a source chooser on Windows, Linux and older macOS. On Windows it can also share system audio.
 - **Native notifications** and an unread count (dock badge on macOS and on Linux launchers that support it; the window title everywhere).
-- Persistent login in an isolated session, remembered window size, single instance, spellcheck.
+- Persistent login in an isolated session, remembered window size, single instance, spellcheck (macOS).
 - **View → Hide Facebook top bar** to remove the global Facebook header (on by default).
 - `Ctrl/Cmd + Shift + M` returns to the inbox from anywhere.
 
@@ -111,6 +111,8 @@ The workflow fails if the tag does not match the `version` in `package.json`. It
 | `test/privacy.test.js` | Enforces the guarantees in [PRIVACY.md](PRIVACY.md) |
 | `install.sh`, `install.ps1` | One-line installers for macOS and Windows |
 
+Security issues: see [SECURITY.md](SECURITY.md).
+
 The page runs with `contextIsolation`, `sandbox` and no Node integration; the app injects only CSS. Permissions are limited to notifications, microphone/camera, screen capture, clipboard write and fullscreen. Builds enable cookie encryption and disable Electron's Node/inspector entry points via fuses. The user agent drops the `Electron` token so Facebook serves its normal web client.
 
 ### Adjusting the route policy
@@ -127,6 +129,7 @@ If a login, security or call step ever gets sent to your browser, add its path p
 
 - Depends on Facebook's web client: if Meta changes it, the top-bar hiding (`div[role="banner"]`) or a route may need updating.
 - Windows shows the unread count in the window title only, not as a taskbar badge.
+- Spellcheck is macOS-only: on Windows and Linux Electron would download dictionaries from Google, so it is off to keep traffic Facebook-only.
 - No auto-update; re-run the install command to upgrade.
 - Builds are not signed with paid Apple/Microsoft certificates; the install scripts avoid the resulting warnings, browser downloads do not.
 

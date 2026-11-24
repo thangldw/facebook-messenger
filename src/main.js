@@ -3,7 +3,7 @@
 const { app, BrowserWindow, Menu, shell, session, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { classify, HOME_URL } = require('./routes');
+const { classify, isFacebookUrl, HOME_URL } = require('./routes');
 const { handleDisplayMediaRequest } = require('./screen-share');
 
 const PARTITION = 'persist:messenger';
@@ -23,9 +23,24 @@ let mainWindow = null;
 let topbarCssKey = null;
 let prefs = { hideTopBar: true };
 
-function readJson(file, fallback) {
-  try { return { ...fallback, ...JSON.parse(fs.readFileSync(file, 'utf8')) }; }
-  catch { return fallback; }
+function readJson(file) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return {}; }
+}
+
+// Only take known keys of the expected type from files on disk, so an edited
+// settings file cannot inject arbitrary BrowserWindow options.
+function loadBounds() {
+  const saved = readJson(STATE_FILE());
+  const bounds = { width: 1100, height: 780 };
+  for (const k of ['x', 'y', 'width', 'height']) {
+    if (Number.isFinite(saved[k])) bounds[k] = Math.round(saved[k]);
+  }
+  return bounds;
+}
+
+function loadPrefs() {
+  const saved = readJson(PREFS_FILE());
+  return { hideTopBar: typeof saved.hideTopBar === 'boolean' ? saved.hideTopBar : true };
 }
 
 function writeJson(file, data) {
@@ -51,23 +66,58 @@ function openExternal(url) {
   if (/^https?:\/\//i.test(url)) shell.openExternal(url);
 }
 
-function attachGuards(win) {
-  const wc = win.webContents;
+// Navigation and window-creation policy, applied to every window the app
+// creates: the main window, call windows and any popup they open. App windows
+// have no address bar, so nothing but Facebook may ever render in one.
+function guardContents(wc) {
+  const isMain = () => mainWindow !== null && wc === mainWindow.webContents;
 
   // Full navigations triggered by the page (link clicks, form posts).
   wc.on('will-navigate', (event, url) => {
     const kind = classify(url);
     if (kind === 'allowed') return;
     event.preventDefault();
-    if (kind === 'feed') wc.loadURL(HOME_URL);
+    if (kind === 'feed') { if (isMain()) wc.loadURL(HOME_URL); }
     else openExternal(url);
   });
 
-  // Server redirects (e.g. post-login redirect to "/") land here. Only bounce
-  // feed routes: unknown paths may be part of login/checkpoint flows.
-  wc.on('did-navigate', (_e, url) => {
-    if (classify(url) === 'feed') wc.loadURL(HOME_URL);
+  // Server redirects may pass through unlisted Facebook paths (login,
+  // checkpoint), but must never land on a third-party site inside the app.
+  wc.on('will-redirect', (event) => {
+    if (!event.isMainFrame || event.url === 'about:blank' || isFacebookUrl(event.url)) return;
+    event.preventDefault();
+    openExternal(event.url);
   });
+
+  // Last line of defence if a non-Facebook page still loads in an app window.
+  wc.on('did-navigate', (_e, url) => {
+    if (url === 'about:blank') return;
+    if (!isFacebookUrl(url)) {
+      if (isMain()) wc.loadURL(HOME_URL); else wc.close();
+      return;
+    }
+    // Post-login redirect to "/" and similar: back to the inbox.
+    if (isMain() && classify(url) === 'feed') wc.loadURL(HOME_URL);
+  });
+
+  wc.setWindowOpenHandler(({ url }) => {
+    // Call windows must stay in-app to keep the session; they get the same guards.
+    if (classify(url) === 'allowed') {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          autoHideMenuBar: true,
+          webPreferences: { partition: PARTITION, contextIsolation: true, sandbox: true, nodeIntegration: false },
+        },
+      };
+    }
+    openExternal(url);
+    return { action: 'deny' };
+  });
+}
+
+function attachMainWindowBehaviour(win) {
+  const wc = win.webContents;
 
   // Facebook is an SPA: clicking the logo or a profile name is a pushState.
   wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
@@ -76,21 +126,6 @@ function attachGuards(win) {
     if (kind === 'allowed') return;
     if (kind !== 'feed') openExternal(url);
     wc.loadURL(HOME_URL);
-  });
-
-  wc.setWindowOpenHandler(({ url }) => {
-    // Call windows must stay in-app to keep the session.
-    if (classify(url) === 'allowed') {
-      return {
-        action: 'allow',
-        overrideBrowserWindowOptions: {
-          autoHideMenuBar: true,
-          webPreferences: { partition: PARTITION, contextIsolation: true, sandbox: true },
-        },
-      };
-    }
-    openExternal(url);
-    return { action: 'deny' };
   });
 
   wc.on('dom-ready', () => applyTopBarCss(wc));
@@ -107,9 +142,17 @@ function attachGuards(win) {
 function configureSession() {
   const ses = session.fromPartition(PARTITION);
   ses.setUserAgent(chromeUserAgent());
+  // Granted only to Facebook's own frames, never to embedded third-party iframes.
   const allowed = new Set(['notifications', 'media', 'display-capture', 'clipboard-sanitized-write', 'fullscreen']);
-  ses.setPermissionRequestHandler((_wc, permission, cb) => cb(allowed.has(permission)));
-  ses.setPermissionCheckHandler((_wc, permission) => allowed.has(permission));
+  ses.setPermissionRequestHandler((_wc, permission, cb, details) => {
+    cb(allowed.has(permission) && isFacebookUrl(details.requestingUrl));
+  });
+  ses.setPermissionCheckHandler((_wc, permission, requestingOrigin) => {
+    return allowed.has(permission) && isFacebookUrl(requestingOrigin);
+  });
+  // Spellcheck dictionaries are downloaded from Google's CDN on Windows/Linux;
+  // macOS uses the OS spellchecker. Keep the app's traffic Facebook-only.
+  ses.setSpellCheckerEnabled(process.platform === 'darwin');
   // macOS 15+ shows the native system picker; elsewhere our handler asks for a source.
   ses.setDisplayMediaRequestHandler(handleDisplayMediaRequest, { useSystemPicker: true });
 }
@@ -176,9 +219,8 @@ function buildMenu() {
 }
 
 function createWindow() {
-  const state = readJson(STATE_FILE(), { width: 1100, height: 780 });
   mainWindow = new BrowserWindow({
-    ...state,
+    ...loadBounds(),
     minWidth: 480,
     minHeight: 400,
     title: 'Messenger Lite',
@@ -192,12 +234,20 @@ function createWindow() {
     },
   });
 
-  attachGuards(mainWindow);
+  attachMainWindowBehaviour(mainWindow);
   mainWindow.on('close', () => {
     if (!mainWindow.isMaximized() && !mainWindow.isFullScreen()) writeJson(STATE_FILE(), mainWindow.getBounds());
   });
   mainWindow.on('closed', () => { mainWindow = null; });
   mainWindow.loadURL(HOME_URL);
+}
+
+// A remote-debugging port lets any local process read the page and its cookies
+// over the DevTools protocol, bypassing cookie encryption. Fuses already block
+// --inspect; refuse Chromium's debugging switches in packaged builds too.
+const DEBUG_SWITCHES = ['remote-debugging-port', 'remote-debugging-pipe', 'remote-debugging-address'];
+if (app.isPackaged && DEBUG_SWITCHES.some((s) => app.commandLine.hasSwitch(s))) {
+  app.exit(1);
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -209,8 +259,14 @@ if (!app.requestSingleInstanceLock()) {
     mainWindow.focus();
   });
 
+  app.on('web-contents-created', (_e, wc) => {
+    // No <webview> tags anywhere: they would bypass the guards below.
+    wc.on('will-attach-webview', (event) => event.preventDefault());
+    if (wc.getType() === 'window') guardContents(wc);
+  });
+
   app.whenReady().then(() => {
-    prefs = readJson(PREFS_FILE(), prefs);
+    prefs = loadPrefs();
     configureSession();
     buildMenu();
     createWindow();

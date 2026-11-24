@@ -34,7 +34,10 @@ function hasPrefix(pathname, prefix) {
 function classify(rawUrl) {
   let url;
   try { url = new URL(rawUrl); } catch { return 'external'; }
-  if (url.protocol === 'about:' || url.protocol === 'blob:' || url.protocol === 'data:') return 'allowed';
+  // about:blank is the only non-https page allowed (popups start there before
+  // navigating). data:/blob:/file: could render arbitrary content in an app
+  // window with no address bar, so they are never allowed.
+  if (rawUrl === 'about:blank') return 'allowed';
   if (url.protocol !== 'https:' || !FB_HOSTS.has(url.hostname)) return 'external';
   if (url.hostname.endsWith('messenger.com')) return 'allowed'; // redirects to facebook.com/messages
 
@@ -44,4 +47,14 @@ function classify(rawUrl) {
   return 'external'; // profiles, pages, posts, photos...
 }
 
-module.exports = { classify, HOME_URL };
+// True for https origins operated by Facebook/Messenger. Used to gate
+// permissions and server redirects, which must not reach third-party sites.
+function isFacebookUrl(rawUrl) {
+  let url;
+  try { url = new URL(rawUrl); } catch { return false; }
+  if (url.protocol !== 'https:') return false;
+  const h = url.hostname;
+  return ['facebook.com', 'messenger.com'].some((d) => h === d || h.endsWith(`.${d}`));
+}
+
+module.exports = { classify, isFacebookUrl, HOME_URL };

@@ -12,7 +12,9 @@ const path = require('path');
 const SRC = path.join(__dirname, '..', 'src');
 const sources = fs.readdirSync(SRC)
   .filter((f) => f.endsWith('.js'))
-  .map((f) => ({ file: f, code: fs.readFileSync(path.join(SRC, f), 'utf8').replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, '') }));
+  // Strip comments so they cannot satisfy or trip a check. A line comment must
+  // start the line or follow whitespace, so "\/\/" in regexes and "https://" survive.
+  .map((f) => ({ file: f, code: fs.readFileSync(path.join(SRC, f), 'utf8').replace(/(^|\s)\/\/.*$|\/\*[\s\S]*?\*\//gm, '$1') }));
 const main = sources.find((s) => s.file === 'main.js').code;
 const pkg = require('../package.json');
 
@@ -44,6 +46,40 @@ test('page runs isolated from the app (contextIsolation, sandbox, no Node)', () 
   assert.match(main, /sandbox:\s*true/);
   assert.match(main, /nodeIntegration:\s*false/);
   assert.doesNotMatch(main, /nodeIntegration:\s*true|contextIsolation:\s*false|sandbox:\s*false/);
+});
+
+test('every window is guarded and <webview> is blocked', () => {
+  assert.match(main, /app\.on\(['"]web-contents-created['"]/);
+  assert.match(main, /will-attach-webview[^\n]*preventDefault/);
+  assert.match(main, /guardContents\(wc\)/);
+  for (const ev of ['will-navigate', 'will-redirect', 'did-navigate']) {
+    assert.match(main, new RegExp(`wc\\.on\\(['"]${ev}['"]`), `missing ${ev} guard`);
+  }
+  assert.match(main, /setWindowOpenHandler/);
+});
+
+test('permissions and screen capture are limited to Facebook origins', () => {
+  assert.match(main, /setPermissionRequestHandler\([^]*?isFacebookUrl\(details\.requestingUrl\)/);
+  assert.match(main, /setPermissionCheckHandler\([^]*?isFacebookUrl\(requestingOrigin\)/);
+  const share = sources.find((s) => s.file === 'screen-share.js').code;
+  assert.match(share, /isFacebookUrl\(request\.securityOrigin\)/);
+});
+
+test('packaged builds refuse remote-debugging switches', () => {
+  assert.ok(main.includes('if (app.isPackaged && DEBUG_SWITCHES.some((s) => app.commandLine.hasSwitch(s))) {\n  app.exit(1);'));
+  for (const s of ['remote-debugging-port', 'remote-debugging-pipe']) assert.ok(main.includes(`'${s}'`));
+});
+
+test('no third-party spellcheck dictionary downloads (Windows/Linux)', () => {
+  assert.match(main, /setSpellCheckerEnabled\(process\.platform === ['"]darwin['"]\)/);
+});
+
+test('external links only open http(s) in the browser', () => {
+  // Every shell.openExternal call must sit behind the http(s) check, so a page
+  // cannot launch file:, smb: or custom-protocol handlers on the computer.
+  const calls = sources.flatMap((s) => s.code.split('\n').filter((l) => l.includes('shell.openExternal')));
+  assert.ok(calls.length > 0);
+  for (const line of calls) assert.ok(line.includes('/^https?:'), `unguarded: ${line.trim()}`);
 });
 
 test('permissions are an explicit allow-list', () => {

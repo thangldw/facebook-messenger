@@ -1,0 +1,14 @@
+version: 2
+updates:
+  # Electron ships Chromium; its security fixes only reach users through new releases.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      build-tooling:
+        patterns: ["electron-builder", "@electron/*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

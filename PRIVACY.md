@@ -23,7 +23,7 @@ Everything lives in one folder on your computer and nowhere else:
 | Facebook's cache, local storage, IndexedDB | `Partitions/messenger/…` | Yes, as in a browser. Written by Facebook's web page, not by the app. Can include recent messages Facebook caches for speed. |
 | App settings | `window-state.json`, `prefs.json` | Yes: window size/position and the "hide top bar" toggle. Nothing else. |
 
-The app sends **nothing** anywhere itself: no analytics, no crash reports, no update checks. The only network traffic is Facebook's web page talking to Facebook, plus links you choose to open in your browser.
+The app sends **nothing** anywhere itself: no analytics, no crash reports, no update checks. The only network traffic is Facebook's web page talking to Facebook, plus links you choose to open in your browser. Spellcheck uses the macOS spellchecker on macOS; on Windows and Linux it is turned off, because Electron would download dictionaries from Google there.
 
 ## Why the app cannot read your password
 
@@ -33,7 +33,8 @@ Your login happens inside Facebook's web page. The app is deliberately built so 
 2. **The page is isolated from the app.** It runs with `contextIsolation: true`, `sandbox: true` and `nodeIntegration: false`, so Facebook's page, or anything injected into it, cannot reach the app or your files either.
 3. **The app does not touch cookies or traffic.** It never reads the cookie store and does not inspect, intercept or proxy network requests.
 4. **The binary is hardened.** Builds enable the Electron fuses that encrypt cookies at rest and disable `ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS` and `--inspect`, the usual ways to turn an Electron app into a tool for reading its data. The app only loads its own code from its integrity-checked `app.asar`.
-5. **Minimal permissions.** The page may only use notifications, microphone/camera (calls), screen capture (screen sharing, after you pick a screen), clipboard write and fullscreen. Everything else (location, USB, Bluetooth, …) is denied.
+5. **Minimal permissions, Facebook only.** Facebook's own pages may use notifications, microphone/camera (calls), screen capture (screen sharing, after you pick a screen), clipboard write and fullscreen. Third-party content embedded in a page gets none of these, and everything else (location, USB, Bluetooth, …) is denied for everyone.
+6. **No fake login windows.** App windows have no address bar, so nothing but Facebook may ever render in one. Every window, including call windows and popups, refuses `data:`, `blob:` and `file:` pages and any non-Facebook site, whether reached by a link, a script, a popup or a server redirect; those links open in your normal browser, where you can see the address. Only `http`/`https` links are handed to the browser, so a page cannot launch other programs on your computer.
 
 These rules are enforced by automated tests in [`test/privacy.test.js`](test/privacy.test.js), which run on every push. If anyone adds code that runs scripts in the page, reads cookies, makes its own network requests, uploads crash reports or weakens the isolation settings, the tests fail.
 

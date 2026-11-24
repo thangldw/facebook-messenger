@@ -1,0 +1,19 @@
+# Security policy
+
+## Supported versions
+
+Only the latest release is supported. Each release ships the Electron (Chromium) version current at the time; update by re-running the install command from the [README](README.md#install).
+
+## Reporting a vulnerability
+
+Please report privately via GitHub: **Security → Report a vulnerability** on this repository ([private advisory](https://github.com/thangldw/facebook-messenger/security/advisories/new)). Do not open a public issue for security problems.
+
+Useful to include: affected version and OS, steps to reproduce, and the impact you expect.
+
+## Scope
+
+In scope: this app's code (`src/`), the install scripts, and the release workflow, for example a way to show non-Facebook content in an app window, to read the session or page content from outside the page, to bypass a permission or the route policy, or to tamper with a release.
+
+Out of scope: vulnerabilities in Facebook/Messenger itself (report them to [Meta](https://www.facebook.com/whitehat)) and in Electron/Chromium (report them [upstream](https://github.com/electron/electron/security)); this project picks up their fixes by updating Electron.
+
+How the app protects your data is described in [PRIVACY.md](PRIVACY.md).

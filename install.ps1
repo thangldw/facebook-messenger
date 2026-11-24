@@ -46,6 +46,8 @@
         $tag = $rel.tag_name
         if (-not $tag) { Die "No release found for $Repo." }
       }
+      # The tag becomes part of a file path and URL; accept only vX.Y.Z.
+      if ($tag -notmatch '^v\d+\.\d+\.\d+$') { Die "Invalid version tag: $tag" }
       $asset = "MessengerLite-$($tag.TrimStart('v'))-win-x64.zip"
       $base = "https://github.com/$Repo/releases/download/$tag"
       $zip = Join-Path $tmp $asset
@@ -76,7 +78,14 @@
       Start-Sleep -Seconds 2
     }
 
-    if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+    if (Test-Path $dest) {
+      # Only ever replace a previous Messenger Lite install (or an empty folder),
+      # so a mistyped MESSENGER_LITE_DIR can never wipe an unrelated directory.
+      $isOurs = Test-Path (Join-Path $dest $ExeName)
+      $isEmpty = -not (Get-ChildItem -Force -Path $dest | Select-Object -First 1)
+      if (-not ($isOurs -or $isEmpty)) { Die "$dest exists and is not a Messenger Lite install; refusing to overwrite it." }
+      Remove-Item -Recurse -Force $dest
+    }
     New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
     Move-Item -Path $extract -Destination $dest
     # Files fetched by PowerShell are not marked as downloaded from the internet,

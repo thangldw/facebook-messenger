@@ -18,6 +18,8 @@ set -euo pipefail
 REPO="thangldw/facebook-messenger"
 APP_NAME="Messenger Lite"
 TMP_DIR=""
+# HTTPS only (including redirects), TLS 1.2+, fail on HTTP errors.
+CURL_OPTS="--proto =https --proto-redir =https --tlsv1.2 -f"
 # Global, not local: the EXIT trap runs after main() has returned.
 trap 'if [ -n "${TMP_DIR:-}" ]; then rm -rf "$TMP_DIR"; fi' EXIT
 
@@ -49,19 +51,23 @@ main() {
     local tag="${MESSENGER_LITE_VERSION:-}"
     if [ -z "$tag" ]; then
       # /releases/latest redirects to /releases/tag/<tag>; no API token needed.
-      tag="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest")"
+      tag="$(curl $CURL_OPTS -sSLI -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest")"
       tag="${tag##*/}"
       case "$tag" in v*) ;; *) die "No release found for $REPO." ;; esac
     fi
+    # The tag becomes part of a file path and URL; accept only vX.Y.Z.
+    [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "Invalid version tag: $tag"
     local asset="MessengerLite-${tag#v}-mac-${arch}.zip"
     local base="https://github.com/$REPO/releases/download/$tag"
 
     say "Downloading $APP_NAME $tag ($arch)"
-    curl -fL --progress-bar -o "$tmp/$asset" "$base/$asset" || die "Download failed: $base/$asset"
-    curl -fsSL -o "$tmp/SHA256SUMS.txt" "$base/SHA256SUMS.txt" || die "Could not download SHA256SUMS.txt"
+    curl $CURL_OPTS -L --progress-bar -o "$tmp/$asset" "$base/$asset" || die "Download failed: $base/$asset"
+    curl $CURL_OPTS -sSL -o "$tmp/SHA256SUMS.txt" "$base/SHA256SUMS.txt" || die "Could not download SHA256SUMS.txt"
 
     say "Verifying SHA-256"
-    grep -E "  $asset\$" "$tmp/SHA256SUMS.txt" > "$tmp/expected.txt" || die "$asset is not listed in SHA256SUMS.txt"
+    # Fixed-string match on the whole line: no regex surprises from dots in the name.
+    awk -v a="$asset" '$2 == a || $2 == "*" a' "$tmp/SHA256SUMS.txt" > "$tmp/expected.txt"
+    [ -s "$tmp/expected.txt" ] || die "$asset is not listed in SHA256SUMS.txt"
     (cd "$tmp" && shasum -a 256 -c expected.txt >/dev/null) || die "Checksum mismatch: the download is corrupt or was tampered with."
     zip="$tmp/$asset"
   fi
