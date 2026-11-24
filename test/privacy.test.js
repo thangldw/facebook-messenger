@@ -24,7 +24,8 @@ const pkg = require('../package.json');
 
 // Each rule may name the only files allowed to use it, with the reason
 // enforced by the dedicated tests further down.
-const OVERLAY_FILES = ['overlay.js', 'ui/overlay-preload.js']; // app's own lock/recovery page
+// The app's own local pages (lock/recovery overlay, settings window).
+const OVERLAY_FILES = ['overlay.js', 'ui/overlay-preload.js', 'settings-window.js', 'ui/settings-preload.js'];
 const FORBIDDEN = {
   'runs script inside the page (could read form fields)': [/\bexecuteJavaScript(InIsolatedWorld)?\b/],
   'injects a preload script into the page': [/\bpreload\b/, OVERLAY_FILES],
@@ -44,9 +45,15 @@ for (const [what, [re, allowedIn = []]] of Object.entries(FORBIDDEN)) {
   });
 }
 
-test('Facebook pages never get a preload or IPC: only the overlay view does', () => {
-  // main.js creates every window that shows Facebook; it must not mention preload at all.
+test('Facebook pages never get a preload or IPC: only the app\'s own pages do', () => {
+  // main.js and account-view.js create every view and window that shows Facebook;
+  // neither may mention preload at all.
   assert.doesNotMatch(main, /\bpreload\b/);
+  const account = code('account-view.js');
+  assert.doesNotMatch(account, /\bpreload\b/);
+  assert.match(account, /contextIsolation: true,\s*sandbox: true,\s*nodeIntegration: false/);
+  // Call windows inherit the account's session and the same isolation.
+  assert.match(main, /webPreferences: \{ session: wc\.session, contextIsolation: true, sandbox: true, nodeIntegration: false \}/);
   const overlay = code('overlay.js');
   assert.match(overlay, /new WebContentsView\(/);
   assert.match(overlay, /preload: path\.join\(__dirname, 'ui', 'overlay-preload\.js'\)/);
@@ -56,12 +63,31 @@ test('Facebook pages never get a preload or IPC: only the overlay view does', ()
 
 test('overlay IPC accepts only its own page and a fixed set of actions', () => {
   const overlay = code('overlay.js');
-  assert.match(overlay, /if \(event\.sender !== wc \|\| !ACTIONS\.has\(action\)\) throw/);
+  assert.match(overlay, /if \(!this\.view \|\| event\.sender !== this\.view\.webContents \|\| !ACTIONS\.has\(action\)\) throw/);
   assert.match(overlay, /wc\.on\('will-navigate', \(e\) => e\.preventDefault\(\)\)/);
   assert.match(overlay, /setWindowOpenHandler\(\(\) => \(\{ action: 'deny' \}\)\)/);
   const html = read('ui/overlay.html');
   assert.match(html, /Content-Security-Policy" content="default-src 'none'; script-src 'self'/);
   assert.doesNotMatch(html, /https?:\/\//, 'overlay page loads nothing remote');
+});
+
+test('settings window IPC accepts only its own page and a fixed set of actions', () => {
+  const sw = code('settings-window.js');
+  assert.match(sw, /event\.sender !== this\.win\.webContents \|\| !ACTIONS\.has\(action\)\) \{\s*throw/);
+  assert.match(sw, /registerAppPage\(wc\)/);
+  assert.match(sw, /wc\.on\('will-navigate', \(e\) => e\.preventDefault\(\)\)/);
+  assert.match(sw, /this\.win\.loadFile\(/);
+  assert.doesNotMatch(sw, /loadURL\(/);
+  const html = read('ui/settings.html');
+  assert.match(html, /Content-Security-Policy" content="default-src 'none'; script-src 'self'/);
+  assert.doesNotMatch(html, /https?:\/\//);
+});
+
+test('accounts never share a session', () => {
+  const account = code('account-view.js');
+  assert.match(account, /return id === 'default' \? 'persist:messenger' : `persist:messenger-\$\{id\}`;/);
+  assert.match(account, /if \(ephemeral\) return `messenger-private-\$\{id\}`;/);
+  assert.match(account, /partition: this\.partition,/);
 });
 
 test('update check: off by default, GitHub releases API only, no cookies', () => {
@@ -80,12 +106,12 @@ test('notifications are withheld while paused or locked', () => {
 });
 
 test('while locked, DevTools and "open in browser" are disabled', () => {
-  assert.match(main, /role: 'toggleDevTools', enabled: !locked/);
+  assert.match(main, /label: 'Toggle Developer Tools', [^\n]*enabled: !locked/);
   assert.match(main, /label: 'Open current page in browser', enabled: !locked/);
 });
 
 test('the only thing injected into the page is CSS', () => {
-  assert.match(main, /\binsertCSS\(/);
+  assert.match(code('account-view.js'), /this\.wc\.insertCSS\(css\)/);
 });
 
 test('page runs isolated from the app (contextIsolation, sandbox, no Node)', () => {

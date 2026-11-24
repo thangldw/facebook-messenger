@@ -14,7 +14,8 @@ It wraps Facebook's own web client at `facebook.com/messages` (messenger.com was
 - **Screen sharing** in calls: the native picker on macOS 15+, and a source chooser on Windows, Linux and older macOS. On Windows it can also share system audio.
 - **Native notifications** and an unread count: menu bar/tray icon, dock badge (macOS), taskbar badge (Windows), window title.
 - **Runs in the background.** Closing the window keeps it in the menu bar (macOS) or system tray (Windows, Linux) so you still get notifications. Optional **Open at login**.
-- **Pause notifications** for an hour, until tomorrow morning, or until you resume (*Notifications* menu or tray).
+- **Multiple accounts**, each with its own separate login. All of them keep running, so you get notifications and unread counts for every account; switch from the *Accounts* menu, the tray, or `Cmd/Ctrl + 1…9`. With one account the app runs a single Facebook page; each extra account adds roughly 200–500 MB of memory depending on how much it has loaded.
+- **Pause notifications** for an hour, until tomorrow morning, or until you resume (*Notifications* menu or tray), or on a weekly **focus schedule** (e.g. weekdays 9:00–18:00, or 22:00–07:00 overnight).
 - **Global shortcut** to show or hide the app from anywhere: `⌃⌥M` on macOS, `Ctrl+Alt+Shift+M` on Windows/Linux.
 - **App lock** with a password (and Touch ID on macOS). Locks on launch, when the computer locks or sleeps, and after 1–60 minutes of inactivity. Notification previews are withheld while locked.
 - **Privacy screen**: blur the app whenever it is not the active window (useful when screen sharing or in public).
@@ -24,7 +25,7 @@ It wraps Facebook's own web client at `facebook.com/messages` (messenger.com was
 - **Hide Facebook top bar**, persistent isolated login, remembered window size, single instance, spellcheck (macOS).
 - `Ctrl/Cmd + Shift + M` returns to the inbox; `Ctrl/Cmd + Shift + L` locks the app.
 
-All options are under the **Settings** menu.
+Toggles are under the **Settings** menu; accounts and the focus schedule are edited in the settings window (`Cmd/Ctrl + ,`).
 
 ## Privacy
 
@@ -126,12 +127,13 @@ The workflow fails if the tag does not match the `version` in `package.json`. It
 
 | File | Purpose |
 |---|---|
-| `src/main.js` | Window, session, permissions, menus, wiring |
+| `src/main.js` | Window, sessions, permissions, accounts, menus, wiring |
+| `src/account-view.js` | One Facebook account: a view with its own session |
 | `src/routes.js` | Route policy: which URLs stay in-app, bounce to the inbox, download, or open externally |
 | `src/settings.js` | Settings, validated against a schema on every read |
-| `src/tray.js`, `src/dnd.js` | Menu bar/tray icon, pause notifications |
+| `src/tray.js`, `src/dnd.js`, `src/focus.js` | Menu bar/tray icon, pause notifications, focus schedule |
 | `src/lock.js`, `src/password.js` | App lock: scrypt password hash, Touch ID, auto-lock |
-| `src/overlay.js`, `src/ui/` | The app's own lock/recovery screen layered over Facebook |
+| `src/overlay.js`, `src/settings-window.js`, `src/ui/` | The app's own pages: lock/recovery screen, settings window |
 | `src/recovery.js` | Reconnect after network failures, reload after crashes/hangs |
 | `src/updater.js` | Opt-in update check (GitHub releases API only) |
 | `src/screen-share.js` | Screen-share source picker for `getDisplayMedia()` |
@@ -157,6 +159,7 @@ If a login, security or call step ever gets sent to your browser, add its path p
 - Depends on Facebook's web client: if Meta changes it, the top-bar hiding (`div[role="banner"]`) or a route may need updating.
 - **A Facebook account is required.** Since messenger.com closed, Meta only offers Messenger on desktop through facebook.com, so this app cannot be used with a deactivated Facebook account without reactivating it (signing in to facebook.com reactivates a deactivated account), nor with a Messenger-only account. Meta's mobile Messenger app is the only option for those.
 - On Windows and Linux, clicking a notification may not bring a hidden window to the front; use the tray icon or the global shortcut.
+- With several accounts, notifications do not say which account they belong to, and clicking one does not switch accounts: the app does not read Facebook's pages, so it cannot see the account name. The tray and *Accounts* menu show unread counts per account.
 - Spellcheck is macOS-only: on Windows and Linux Electron would download dictionaries from Google, so it is off to keep traffic Facebook-only.
 - No automatic installs of updates; turn on *Settings → Check for updates automatically* to be told about new versions, then re-run the install command (or `brew upgrade`).
 - Builds are not signed with paid Apple/Microsoft certificates; the install scripts avoid the resulting warnings, browser downloads do not.

@@ -113,7 +113,7 @@ test('password: throttle after 5 failures, growing, reset on success', () => {
 // ---- do not disturb
 
 function memSettings(init = {}) {
-  const v = { dndUntil: 0, ...init };
+  const v = { dndUntil: 0, focusEnabled: false, focusRules: [], focusOverrideUntil: 0, ...init };
   return { get: (k) => v[k], set: (k, x) => { v[k] = x; } };
 }
 
@@ -131,7 +131,7 @@ test('dnd: pause for a duration, indefinitely, resume', () => {
   d.resume();
   assert.ok(!d.isPaused());
   assert.ok(changes.length >= 3);
-  clearTimeout(d.timer);
+  clearTimeout(d.timer); clearInterval(d.ticker);
 });
 
 test('dnd: next morning is 08:00 local, today or tomorrow', () => {
@@ -159,4 +159,82 @@ test('updater: only well-formed releases from this repo are accepted', () => {
   assert.strictEqual(parseRelease({ ...good, html_url: 'https://github.com/someone-else/facebook-messenger/releases/x' }), null);
   assert.strictEqual(parseRelease({ ...good, tag_name: 'v0.3.0; rm -rf /' }), null);
   assert.strictEqual(parseRelease(null), null);
+});
+
+// ---- focus schedule
+
+const { focusEnd, normalizeRules } = require('../src/focus');
+
+test('focus: weekday office hours', () => {
+  const rules = [{ days: [1, 2, 3, 4, 5], start: '09:00', end: '18:00' }];
+  const mon = (h, m = 0) => new Date(2026, 10, 23, h, m); // Mon 23 Nov 2026
+  assert.strictEqual(focusEnd(rules, mon(8, 59)), null);
+  assert.strictEqual(focusEnd(rules, mon(9, 0)), new Date(2026, 10, 23, 18, 0).getTime());
+  assert.strictEqual(focusEnd(rules, mon(17, 59)), new Date(2026, 10, 23, 18, 0).getTime());
+  assert.strictEqual(focusEnd(rules, mon(18, 0)), null, 'end time is exclusive');
+  assert.strictEqual(focusEnd(rules, new Date(2026, 10, 22, 10, 0)), null, 'Sunday is off');
+});
+
+test('focus: overnight range belongs to the day it starts', () => {
+  const rules = [{ days: [5], start: '22:00', end: '07:00' }]; // Friday night
+  assert.strictEqual(focusEnd(rules, new Date(2026, 10, 27, 23, 0)), new Date(2026, 10, 28, 7, 0).getTime());
+  assert.strictEqual(focusEnd(rules, new Date(2026, 10, 28, 6, 59)), new Date(2026, 10, 28, 7, 0).getTime(), 'Saturday morning');
+  assert.strictEqual(focusEnd(rules, new Date(2026, 10, 28, 7, 0)), null);
+  assert.strictEqual(focusEnd(rules, new Date(2026, 10, 27, 6, 0)), null, 'Friday morning belongs to Thursday');
+});
+
+test('focus: overlapping ranges extend to the latest end', () => {
+  const rules = [{ days: [1], start: '09:00', end: '12:00' }, { days: [1], start: '11:00', end: '14:00' }];
+  assert.strictEqual(focusEnd(rules, new Date(2026, 10, 23, 11, 30)), new Date(2026, 10, 23, 14, 0).getTime());
+});
+
+test('focus: rules are validated', () => {
+  assert.deepStrictEqual(normalizeRules([{ days: [5, 1, 1], start: '09:00', end: '17:30' }]), [{ days: [1, 5], start: '09:00', end: '17:30' }]);
+  for (const bad of [[{ days: [], start: '09:00', end: '10:00' }], [{ days: [1], start: '9:00', end: '10:00' }], [{ days: [1], start: '10:00', end: '10:00' }], [{ days: [7], start: '09:00', end: '10:00' }], 'x', [null]]) {
+    assert.strictEqual(normalizeRules(bad), null, JSON.stringify(bad));
+  }
+  assert.strictEqual(normalizeRules(Array(20).fill({ days: [1], start: '09:00', end: '10:00' })).length, 10);
+});
+
+test('dnd: focus schedule pauses; resume lasts until the period ends; manual pause wins', () => {
+  let now = new Date(2026, 10, 23, 10, 0).getTime(); // Monday 10:00
+  const s = memSettings({ focusEnabled: true, focusRules: [{ days: [1], start: '09:00', end: '18:00' }], focusOverrideUntil: 0 });
+  const d = new Dnd({ settings: s, onChange: () => {}, now: () => now });
+  assert.ok(d.isPaused(), 'in focus period');
+  assert.match(d.label(), /^Focus time until/);
+  d.resume();
+  assert.ok(!d.isPaused(), 'resumed for the rest of the period');
+  d.pauseFor(HOUR_MS);
+  assert.ok(d.isPaused(), 'manual pause still applies');
+  d.resume();
+  now = new Date(2026, 10, 24, 10, 0).getTime(); // Tuesday: rule is Monday only
+  assert.ok(!d.isPaused());
+  now = new Date(2026, 10, 30, 10, 0).getTime(); // next Monday: override has expired
+  assert.ok(d.isPaused(), 'next period pauses again');
+  s.set('focusEnabled', false);
+  assert.ok(!d.isPaused());
+  clearInterval(d.ticker); clearTimeout(d.timer);
+});
+const HOUR_MS = 3600000;
+
+// ---- accounts in settings
+
+test('settings: accounts are validated and the active account must exist', () => {
+  const s = sanitize({
+    accounts: [{ id: 'default', name: ' Personal‮ ' }, { id: 'ab12', name: 'Work' }],
+    activeAccount: 'zz99',
+    lastChats: { default: '/messages/t/1', ab12: 'https://evil.example', ghost: '/messages/t/2' },
+  });
+  assert.deepStrictEqual(s.accounts, [{ id: 'default', name: 'Personal' }, { id: 'ab12', name: 'Work' }]);
+  assert.strictEqual(s.activeAccount, 'default', 'unknown active account falls back to the first');
+  assert.deepStrictEqual(s.lastChats, { default: '/messages/t/1' });
+  for (const bad of [[], [{ id: 'A!', name: 'x' }], [{ id: 'a', name: '' }], [{ id: 'a', name: 'x' }, { id: 'a', name: 'y' }], Array(10).fill(0).map((_, i) => ({ id: `a${i}`, name: 'x' }))]) {
+    assert.deepStrictEqual(sanitize({ accounts: bad }).accounts, [{ id: 'default', name: 'Account 1' }], JSON.stringify(bad));
+  }
+});
+
+test('settings: v0.2 single lastChat migrates to the default account', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ml-mig-'));
+  fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({ lastChat: '/messages/t/42' }));
+  assert.deepStrictEqual(new Settings(dir).get('lastChats'), { default: '/messages/t/42' });
 });

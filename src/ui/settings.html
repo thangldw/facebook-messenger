@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Messenger Lite Settings</title>
+  <link rel="stylesheet" href="overlay.css">
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body class="settings">
+  <main>
+    <section id="accounts" aria-labelledby="accounts-title">
+      <h1 id="accounts-title">Accounts</h1>
+      <p class="muted">Each account has its own login, kept separate from the others. Switch with the Accounts menu, the tray icon, or <kbd id="switch-key">⌘1</kbd>…<kbd>9</kbd>.</p>
+      <ul id="account-list" class="list"></ul>
+      <button id="add-account" type="button" class="secondary">Add account</button>
+      <p class="error" id="accounts-error" role="alert"></p>
+    </section>
+
+    <section id="focus" aria-labelledby="focus-title">
+      <h1 id="focus-title">Focus schedule</h1>
+      <p class="muted">Pause notifications automatically at set times. Unread counts keep updating. During a focus period, <em>Resume notifications</em> turns them back on until it ends.</p>
+      <label class="switch"><input id="focus-enabled" type="checkbox"> Pause notifications on a schedule</label>
+      <ul id="rule-list" class="list"></ul>
+      <div class="row">
+        <button id="add-rule" type="button" class="secondary">Add time range</button>
+        <button id="save-focus" type="button" class="primary">Save schedule</button>
+      </div>
+      <p class="hint" id="focus-status" role="status"></p>
+    </section>
+  </main>
+  <template id="account-row">
+    <li class="account">
+      <input class="name" type="text" maxlength="40" aria-label="Account name">
+      <span class="badge" hidden></span>
+      <button type="button" class="small rename">Rename</button>
+      <button type="button" class="small danger remove">Remove</button>
+    </li>
+  </template>
+  <template id="rule-row">
+    <li class="rule">
+      <div class="days" role="group" aria-label="Days"></div>
+      <div class="times">
+        <label>From <input class="start" type="time" required></label>
+        <label>to <input class="end" type="time" required></label>
+        <button type="button" class="small danger remove-rule" aria-label="Remove time range">✕</button>
+      </div>
+    </li>
+  </template>
+  <script src="settings.js"></script>
+</body>
+</html>

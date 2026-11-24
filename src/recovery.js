@@ -1,7 +1,8 @@
 'use strict';
 
-// Keeps the Facebook page alive: reconnects after network failures, reloads
-// after renderer crashes or hangs, and shows the overlay while it does.
+// Keeps a Facebook page alive: reconnects after network failures, reloads
+// after renderer crashes or hangs, and reports its state ('offline' /
+// 'crashed', or null when healthy) so the app can show the overlay.
 
 const { net, powerMonitor } = require('electron');
 
@@ -13,11 +14,11 @@ const HANG_TIMEOUT_MS = 20 * 1000;
 
 class Recovery {
   /**
-   * @param {object} deps { webContents, overlay, startUrl() }
+   * @param {object} deps { webContents, startUrl(), onStatus(layer, data|null) }
    */
-  constructor({ webContents, overlay, startUrl }) {
+  constructor({ webContents, startUrl, onStatus }) {
     this.wc = webContents;
-    this.overlay = overlay;
+    this.onStatus = onStatus;
     this.startUrl = startUrl;
     this.failing = false;
     this.attempt = 0;
@@ -41,7 +42,7 @@ class Recovery {
       const now = Date.now();
       this.crashes = this.crashes.filter((t) => now - t < CRASH_WINDOW_MS).concat(now);
       if (this.crashes.length > MAX_CRASHES) {
-        this.overlay.setLayer('crashed', {});
+        this.onStatus('crashed', {});
         return;
       }
       setTimeout(() => this.reload(), 1000);
@@ -53,12 +54,13 @@ class Recovery {
     });
     this.wc.on('responsive', () => clearTimeout(this.hangTimer));
 
-    powerMonitor.on('resume', () => { if (this.failing) this.retryNow(); });
+    this.onResume = () => { if (this.failing) this.retryNow(); };
+    powerMonitor.on('resume', this.onResume);
   }
 
   onFailure(description) {
     this.failing = true;
-    this.overlay.setLayer('offline', { status: net.isOnline() ? 'Retrying…' : 'Waiting for the network…', detail: description });
+    this.onStatus('offline', { status: net.isOnline() ? 'Retrying…' : 'Waiting for the network…', detail: description });
     this.schedule();
   }
 
@@ -66,8 +68,8 @@ class Recovery {
     clearTimeout(this.retryTimer);
     this.failing = false;
     this.attempt = 0;
-    this.overlay.setLayer('offline', null);
-    this.overlay.setLayer('crashed', null);
+    this.onStatus('offline', null);
+    this.onStatus('crashed', null);
   }
 
   schedule() {
@@ -86,10 +88,16 @@ class Recovery {
     this.wc.loadURL(this.startUrl());
   }
 
+  destroy() {
+    clearTimeout(this.retryTimer);
+    clearTimeout(this.hangTimer);
+    powerMonitor.removeListener('resume', this.onResume);
+  }
+
   retryNow() {
     this.crashes = [];
     this.attempt = 0;
-    this.overlay.setLayer('crashed', null);
+    this.onStatus('crashed', null);
     this.reload();
   }
 }

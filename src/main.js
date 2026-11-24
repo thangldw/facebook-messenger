@@ -1,18 +1,22 @@
 'use strict';
 
 const {
-  app, BrowserWindow, Menu, shell, session, dialog, globalShortcut, Notification, clipboard, nativeImage,
+  app, BaseWindow, Menu, shell, session, dialog, globalShortcut, Notification, clipboard, nativeImage,
 } = require('electron');
+const crypto = require('crypto');
 const path = require('path');
 const { classify, isFacebookUrl, downloadTarget, HOME_URL } = require('./routes');
 const { handleDisplayMediaRequest } = require('./screen-share');
-const { Settings, isChatPath, LOCK_MINUTES } = require('./settings');
+const { Settings, isChatPath, cleanName, LOCK_MINUTES, MAX_ACCOUNTS } = require('./settings');
+const { AccountView, partitionFor } = require('./account-view');
+const { isAppPage } = require('./app-pages');
 const { AppTray } = require('./tray');
-const { Overlay, isAppPage } = require('./overlay');
+const { Overlay } = require('./overlay');
 const { AppLock } = require('./lock');
-const { Recovery } = require('./recovery');
 const { Dnd, HOUR } = require('./dnd');
+const { normalizeRules, MAX_RULES } = require('./focus');
 const { Updater, updateCommand } = require('./updater');
+const { SettingsWindow } = require('./settings-window');
 
 // Must match build.appId: Windows ties notifications to this ID.
 const APP_ID = 'local.personal.messenger-lite';
@@ -44,16 +48,20 @@ if (app.isPackaged && DEBUG_SWITCHES.some((s) => app.commandLine.hasSwitch(s))) 
 }
 
 let settings;
-let partition;
+let ephemeral = false;
+// The shell window has no page (and no renderer process) of its own;
+// Facebook runs in one view per account inside it.
 let mainWindow = null;
+const accounts = new Map(); // id -> AccountView
+let activeId = null;
 let tray = null;
 let overlay = null;
 let lock = null;
 let dnd = null;
 let updater = null;
+let settingsWin = null;
 let isQuitting = false;
-let unread = 0;
-const cssKeys = { topbar: null, privacy: null };
+const configuredPartitions = new Set();
 
 // ---------------------------------------------------------------- helpers
 
@@ -68,49 +76,66 @@ function openExternal(url) {
   if (/^https?:\/\//i.test(url)) shell.openExternal(url);
 }
 
-function startUrl() {
-  const last = settings.get('lastChat');
-  if (settings.get('restoreLastChat') && !settings.get('ephemeral') && isChatPath(last)) return FB_ORIGIN + last;
+const active = () => accounts.get(activeId);
+const accountFor = (wc) => [...accounts.values()].find((a) => a.wc === wc);
+const totalUnread = () => [...accounts.values()].reduce((n, a) => n + a.unread, 0);
+
+function startUrlFor(acc) {
+  const last = settings.get('lastChats')[acc.id];
+  if (settings.get('restoreLastChat') && !ephemeral && isChatPath(last)) return FB_ORIGIN + last;
   return HOME_URL;
 }
 
-let saveChatTimer = null;
-function rememberChat(url) {
-  if (!settings.get('restoreLastChat') || settings.get('ephemeral')) return;
+const saveChatTimers = new Map();
+function rememberChat(acc, url) {
+  if (!settings.get('restoreLastChat') || ephemeral) return;
   let p;
   try { p = new URL(url).pathname; } catch { return; }
-  if (!isChatPath(p) || p === settings.get('lastChat')) return;
-  clearTimeout(saveChatTimer);
-  saveChatTimer = setTimeout(() => settings.set('lastChat', p), 2000);
+  if (!isChatPath(p) || settings.get('lastChats')[acc.id] === p) return;
+  clearTimeout(saveChatTimers.get(acc.id));
+  saveChatTimers.set(acc.id, setTimeout(() => {
+    if (!accounts.has(acc.id)) return;
+    settings.set('lastChats', { ...settings.get('lastChats'), [acc.id]: p });
+  }, 2000));
 }
 
 function notificationsAllowed() {
   return !dnd.isPaused() && !(lock && lock.locked);
 }
 
-async function setPageCss(wc, key, css, on) {
-  if (cssKeys[key]) {
-    await wc.removeInsertedCSS(cssKeys[key]).catch(() => {});
-    cssKeys[key] = null;
-  }
-  if (on) cssKeys[key] = await wc.insertCSS(css).catch(() => null);
+function applyCss(acc) {
+  acc.setCss('topbar', HIDE_TOPBAR_CSS, settings.get('hideTopBar'));
+  acc.setCss('privacy', PRIVACY_CSS, settings.get('privacyScreen') && !(mainWindow && mainWindow.isFocused()));
 }
 
-function applyPageCss() {
-  if (!mainWindow) return;
-  const wc = mainWindow.webContents;
-  setPageCss(wc, 'topbar', HIDE_TOPBAR_CSS, settings.get('hideTopBar'));
-  setPageCss(wc, 'privacy', PRIVACY_CSS, settings.get('privacyScreen') && !mainWindow.isFocused());
+function applyCssAll() {
+  for (const acc of accounts.values()) applyCss(acc);
+}
+
+function confirmParent() {
+  return mainWindow && mainWindow.isVisible() ? mainWindow : null;
+}
+
+async function confirm(message, detail, okLabel) {
+  const options = { type: 'question', message, detail, buttons: [okLabel, 'Cancel'], defaultId: 0, cancelId: 1 };
+  const parent = confirmParent();
+  const { response } = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options);
+  return response === 0;
 }
 
 // ---------------------------------------------------------------- window
 
+function focusActive() {
+  if (overlay && overlay.visible) overlay.focus();
+  else if (active()) active().wc.focus();
+}
+
 function showWindow() {
-  if (!mainWindow) createWindow({ show: true });
+  if (!mainWindow) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
-  overlay.focus();
+  focusActive();
 }
 
 function toggleWindow() {
@@ -118,23 +143,48 @@ function toggleWindow() {
   else showWindow();
 }
 
-function setUnread(count) {
-  unread = count;
-  app.setBadgeCount(count); // macOS dock, supported Linux launchers
-  if (isWin && mainWindow) {
-    const badge = nativeImage.createFromPath(path.join(__dirname, 'assets', 'badge.png'));
-    mainWindow.setOverlayIcon(count > 0 ? badge : null, count > 0 ? `${count} unread` : '');
-  }
-  if (mainWindow) mainWindow.setTitle(count > 0 ? `(${count}) Messenger Lite` : 'Messenger Lite');
-  if (tray) tray.setUnread(count, { paused: dnd.isPaused() });
+function layout() {
+  if (!mainWindow) return;
+  const [width, height] = mainWindow.getContentSize();
+  for (const acc of accounts.values()) acc.view.setBounds({ x: 0, y: 0, width, height });
+  if (overlay) overlay.layout();
 }
 
+function updateTitle() {
+  if (!mainWindow) return;
+  const total = totalUnread();
+  const name = accounts.size > 1 && active() ? ` — ${active().name}` : '';
+  mainWindow.setTitle(`${total > 0 ? `(${total}) ` : ''}Messenger Lite${name}`);
+}
+
+function onUnread() {
+  const total = totalUnread();
+  app.setBadgeCount(total); // macOS dock, supported Linux launchers
+  if (isWin && mainWindow) {
+    const badge = nativeImage.createFromPath(path.join(__dirname, 'assets', 'badge.png'));
+    mainWindow.setOverlayIcon(total > 0 ? badge : null, total > 0 ? `${total} unread` : '');
+  }
+  updateTitle();
+  if (tray) tray.setUnread(total, { paused: dnd.isPaused() });
+  if (settingsWin) settingsWin.push();
+}
+
+// Show the offline/crashed screen for the account being viewed only.
+function refreshStatus() {
+  const acc = active();
+  if (!overlay || !acc) return;
+  overlay.setLayer('offline', acc.status.offline);
+  overlay.setLayer('crashed', acc.status.crashed);
+}
+
+// ---------------------------------------------------------------- guards
+
 // Navigation and window-creation policy, applied to every window the app
-// creates: the main window, call windows and any popup they open. App windows
+// creates: account views, call windows and any popup they open. App windows
 // have no address bar, so nothing but Facebook may ever render in one.
 function guardContents(wc) {
-  const isMain = () => mainWindow !== null && wc === mainWindow.webContents;
-  // The overlay registers itself after creation, so this is checked per event.
+  const account = () => accountFor(wc);
+  // The app's own pages register themselves after creation, so this is checked per event.
   const skip = () => isAppPage(wc);
 
   // Full navigations triggered by the page (link clicks, form posts).
@@ -145,7 +195,7 @@ function guardContents(wc) {
     const kind = classify(url);
     if (kind === 'allowed') return;
     event.preventDefault();
-    if (kind === 'feed') { if (isMain()) wc.loadURL(HOME_URL); }
+    if (kind === 'feed') { if (account()) wc.loadURL(HOME_URL); }
     else openExternal(url);
   });
 
@@ -163,24 +213,24 @@ function guardContents(wc) {
   wc.on('did-navigate', (_e, url) => {
     if (skip() || url === 'about:blank') return;
     if (!isFacebookUrl(url)) {
-      if (isMain()) wc.loadURL(HOME_URL); else wc.close();
+      if (account()) wc.loadURL(HOME_URL); else wc.close();
       return;
     }
     // Post-login redirect to "/" and similar: back to the inbox.
-    if (isMain() && classify(url) === 'feed') wc.loadURL(HOME_URL);
+    if (account() && classify(url) === 'feed') wc.loadURL(HOME_URL);
   });
 
   wc.setWindowOpenHandler(({ url }) => {
     // Attachments and "Download" buttons: save the file, never render it.
     const file = downloadTarget(url);
     if (file) { wc.downloadURL(file); return { action: 'deny' }; }
-    // Call windows must stay in-app to keep the session; they get the same guards.
+    // Call windows must stay in-app to keep the account's session; they get the same guards.
     if (classify(url) === 'allowed') {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
           autoHideMenuBar: true,
-          webPreferences: { partition, contextIsolation: true, sandbox: true, nodeIntegration: false },
+          webPreferences: { session: wc.session, contextIsolation: true, sandbox: true, nodeIntegration: false },
         },
       };
     }
@@ -189,100 +239,25 @@ function guardContents(wc) {
   });
 }
 
-function attachMainWindowBehaviour(win) {
-  const wc = win.webContents;
-
+function attachAccountBehaviour(acc) {
+  const { wc } = acc;
   // Facebook is an SPA: clicking the logo or a profile name is a pushState.
   wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
     if (!isMainFrame) return;
     const kind = classify(url);
-    if (kind === 'allowed') { rememberChat(url); return; }
+    if (kind === 'allowed') { rememberChat(acc, url); return; }
     if (kind !== 'feed') openExternal(url);
     wc.loadURL(HOME_URL);
   });
-  wc.on('did-navigate', (_e, url) => rememberChat(url));
-
-  wc.on('dom-ready', () => applyPageCss());
-
-  // Unread count: Facebook sets the title to "(3) Messenger" / "(3) Facebook".
-  win.on('page-title-updated', (e, title) => {
-    e.preventDefault();
-    const m = title.match(/^\((\d+)\)/);
-    setUnread(m ? Number(m[1]) : 0);
-  });
-
-  win.on('focus', () => setPageCss(wc, 'privacy', PRIVACY_CSS, false));
-  win.on('blur', () => setPageCss(wc, 'privacy', PRIVACY_CSS, settings.get('privacyScreen')));
+  wc.on('did-navigate', (_e, url) => rememberChat(acc, url));
+  wc.on('dom-ready', () => applyCss(acc));
 }
 
-let saveBoundsTimer = null;
-function saveBounds() {
-  if (!mainWindow || mainWindow.isMaximized() || mainWindow.isFullScreen() || mainWindow.isMinimized()) return;
-  clearTimeout(saveBoundsTimer);
-  saveBoundsTimer = setTimeout(() => {
-    if (mainWindow) settings.set('bounds', mainWindow.getNormalBounds());
-  }, 500);
-}
+// ---------------------------------------------------------------- sessions
 
-function createWindow({ show }) {
-  mainWindow = new BrowserWindow({
-    width: 1100,
-    height: 780,
-    ...(settings.get('bounds') || {}),
-    minWidth: 480,
-    minHeight: 400,
-    show,
-    title: 'Messenger Lite',
-    backgroundColor: '#111214',
-    autoHideMenuBar: true,
-    webPreferences: {
-      partition,
-      contextIsolation: true,
-      sandbox: true,
-      nodeIntegration: false,
-      spellcheck: true,
-    },
-  });
-
-  attachMainWindowBehaviour(mainWindow);
-  mainWindow.on('resize', saveBounds);
-  mainWindow.on('move', saveBounds);
-
-  // Run in background: closing the window hides it; quit from the tray or menu.
-  mainWindow.on('close', (e) => {
-    if (isQuitting || !settings.get('runInBackground')) return;
-    e.preventDefault();
-    mainWindow.hide();
-    if (isWin && !settings.get('trayHintShown')) {
-      tray.displayBalloon('Messenger Lite is still running', 'It keeps notifying you about new messages. Quit from the tray icon.');
-      settings.set('trayHintShown', true);
-    }
-  });
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-    if (overlay) overlay.destroy();
-    overlay = null;
-  });
-
-  let recovery = null;
-  overlay = new Overlay(mainWindow, {
-    unlock: (pw) => lock.tryPassword(pw),
-    touchId: () => lock.tryTouchId(),
-    setPassword: (pw) => lock.finishSetup(pw),
-    cancel: () => lock.cancelSetup(),
-    retry: () => recovery && recovery.retryNow(),
-    reset: () => resetEverything(),
-  });
-  lock.overlay = overlay;
-  recovery = new Recovery({ webContents: mainWindow.webContents, overlay, startUrl });
-
-  mainWindow.loadURL(startUrl());
-  if (lock && lock.enabled) { lock.locked = false; lock.lock(); }
-}
-
-// ---------------------------------------------------------------- session
-
-function configureSession() {
+function configureSession(partition) {
+  if (configuredPartitions.has(partition)) return;
+  configuredPartitions.add(partition);
   const ses = session.fromPartition(partition);
   ses.setUserAgent(chromeUserAgent());
 
@@ -312,61 +287,149 @@ function configureSession() {
   });
 }
 
-// ---------------------------------------------------------------- actions
-
-async function confirm(message, detail, okLabel) {
-  const options = { type: 'question', message, detail, buttons: [okLabel, 'Cancel'], defaultId: 0, cancelId: 1 };
-  const { response } = mainWindow && mainWindow.isVisible()
-    ? await dialog.showMessageBox(mainWindow, options)
-    : await dialog.showMessageBox(options);
-  return response === 0;
-}
-
-// Deletes everything the app keeps for Facebook: cookies (the login session),
+// Deletes everything the app keeps for an account: cookies (the login session),
 // local/IndexedDB storage, service workers and HTTP cache.
-async function clearFacebookData(part = partition) {
-  const ses = session.fromPartition(part);
+async function clearPartition(partition) {
+  const ses = session.fromPartition(partition);
   await ses.clearStorageData();
   await ses.clearCache();
   await ses.clearAuthCache();
-  settings.set('lastChat', '');
 }
 
-async function logOutAndClearData() {
+// ---------------------------------------------------------------- accounts
+
+function addAccountView({ id, name }) {
+  const acc = new AccountView({
+    id,
+    name,
+    ephemeral,
+    startUrl: startUrlFor,
+    onUnread,
+    onStatus: (a) => { if (a.id === activeId) refreshStatus(); },
+  });
+  configureSession(acc.partition);
+  attachAccountBehaviour(acc);
+  accounts.set(id, acc);
+  mainWindow.contentView.addChildView(acc.view);
+  acc.view.setVisible(id === activeId && !(lock && lock.locked));
+  layout();
+  if (overlay) overlay.raise();
+  acc.load();
+  return acc;
+}
+
+// Only the active account is shown, and none while locked: the views are
+// hidden before the lock screen has even loaded, so nothing shows through.
+function applyVisibility() {
+  const locked = Boolean(lock && lock.locked);
+  for (const acc of accounts.values()) acc.view.setVisible(!locked && acc.id === activeId);
+}
+
+function switchAccount(id) {
+  if (!accounts.has(id) || (lock && lock.locked)) return;
+  activeId = id;
+  if (settings.get('activeAccount') !== id) settings.set('activeAccount', id);
+  applyVisibility();
+  refreshStatus();
+  updateTitle();
+  rebuildMenus();
+  if (settingsWin) settingsWin.push();
+  if (mainWindow && mainWindow.isVisible()) focusActive();
+}
+
+async function addAccount() {
+  const list = settings.get('accounts');
+  if (list.length >= MAX_ACCOUNTS) return { ok: false, error: `You can add up to ${MAX_ACCOUNTS} accounts.` };
+  let id;
+  do { id = crypto.randomBytes(4).toString('hex'); } while (list.some((a) => a.id === id));
+  let n = list.length + 1;
+  while (list.some((a) => a.name === `Account ${n}`)) n += 1;
+  const name = `Account ${n}`;
+  settings.set('accounts', [...list, { id, name }]);
+  addAccountView({ id, name });
+  switchAccount(id);
+  showWindow();
+  return { ok: true };
+}
+
+function renameAccount({ id, name } = {}) {
+  const clean = cleanName(name);
+  if (!clean) return { ok: false, error: 'Enter a name.' };
+  const list = settings.get('accounts');
+  if (!list.some((a) => a.id === id)) return { ok: false, error: 'Unknown account.' };
+  settings.set('accounts', list.map((a) => (a.id === id ? { ...a, name: clean } : a)));
+  accounts.get(id).name = clean;
+  updateTitle();
+  rebuildMenus();
+  return { ok: true };
+}
+
+async function removeAccount({ id } = {}) {
+  const acc = accounts.get(id);
+  const list = settings.get('accounts');
+  if (!acc) return { ok: false, error: 'Unknown account.' };
+  if (list.length === 1) return { ok: false, error: 'You need at least one account.' };
+  const ok = await confirm(`Remove "${acc.name}"?`, 'This logs the account out and deletes its data in this app. Your Facebook account itself is not affected.', 'Remove');
+  if (!ok) return { ok: false };
+  const remaining = list.filter((a) => a.id !== id);
+  settings.set('accounts', remaining);
+  const chats = settings.get('lastChats');
+  delete chats[id];
+  settings.set('lastChats', chats);
+  mainWindow.contentView.removeChildView(acc.view);
+  acc.destroy();
+  accounts.delete(id);
+  if (!ephemeral) await clearPartition(acc.partition);
+  if (activeId === id) switchAccount(remaining[0].id); else rebuildMenus();
+  onUnread();
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------- actions
+
+async function logOutActive() {
+  const acc = active();
   const ok = await confirm(
-    'Log out and delete all local data?',
-    'This removes your Facebook session, cached messages and settings stored by Facebook in this app. You will need to sign in again.',
+    accounts.size > 1 ? `Log out of "${acc.name}" and delete its data?` : 'Log out and delete all local data?',
+    'This removes the Facebook session, cached messages and settings stored by Facebook in this app. You will need to sign in again.',
     'Log out and clear',
   );
   if (!ok) return;
-  await clearFacebookData();
-  if (mainWindow) mainWindow.loadURL(HOME_URL);
+  await clearPartition(acc.partition);
+  const chats = settings.get('lastChats');
+  delete chats[acc.id];
+  settings.set('lastChats', chats);
+  acc.wc.loadURL(HOME_URL);
 }
 
 // "Forgot password" on the lock screen: the only way past the lock without the
-// password is to wipe the Facebook session and the lock together.
+// password is to wipe every account's session and the lock together.
 async function resetEverything() {
   const ok = await confirm(
     'Log out and reset Messenger Lite?',
-    'This deletes your Facebook session and data in this app and turns off the app lock. You will need to sign in to Facebook again.',
+    'This deletes the Facebook sessions and data of all accounts in this app and turns off the app lock. You will need to sign in to Facebook again.',
     'Log out and reset',
   );
   if (!ok) return;
-  await clearFacebookData();
+  for (const acc of accounts.values()) await clearPartition(acc.partition);
+  settings.set('lastChats', {});
   lock.disable();
-  if (mainWindow) mainWindow.loadURL(HOME_URL);
+  for (const acc of accounts.values()) acc.wc.loadURL(HOME_URL);
 }
 
 async function setEphemeral(on) {
   const ok = await confirm(
     on ? 'Turn on private mode?' : 'Turn off private mode?',
     on
-      ? 'Nothing is written to disk: you are logged out whenever you quit. This also logs you out now and deletes the data stored so far. Messenger Lite will restart.'
-      : 'Your login and Facebook cache will be kept between launches again. Messenger Lite will restart.',
+      ? 'Nothing is written to disk: all accounts are logged out whenever you quit. This also logs them out now and deletes the data stored so far. Messenger Lite will restart.'
+      : 'Logins and Facebook cache will be kept between launches again. Messenger Lite will restart.',
     'Restart',
   );
   if (!ok) { rebuildMenus(); return; }
-  if (on) await clearFacebookData('persist:messenger');
+  if (on) {
+    for (const { id } of settings.get('accounts')) await clearPartition(partitionFor(id, false));
+    settings.set('lastChats', {});
+  }
   settings.set('ephemeral', on);
   app.relaunch();
   isQuitting = true;
@@ -376,16 +439,14 @@ async function setEphemeral(on) {
 function setOpenAtLogin(on) {
   app.setLoginItemSettings({ openAtLogin: on, args: isWin ? ['--hidden'] : [] });
   settings.set('openAtLogin', on);
-  if (isMac && on) {
-    const { status } = app.getLoginItemSettings();
-    if (status === 'requires-approval') {
-      dialog.showMessageBox({
-        type: 'info',
-        message: 'Allow Messenger Lite to open at login',
-        detail: 'macOS needs your approval: System Settings → General → Login Items, then turn on Messenger Lite.',
-      });
-    }
+  if (isMac && on && app.getLoginItemSettings().status === 'requires-approval') {
+    dialog.showMessageBox({
+      type: 'info',
+      message: 'Allow Messenger Lite to open at login',
+      detail: 'macOS needs your approval: System Settings → General → Login Items, then turn on Messenger Lite.',
+    });
   }
+  rebuildMenus();
 }
 
 function applyGlobalShortcut() {
@@ -400,6 +461,37 @@ function applyGlobalShortcut() {
     });
   }
 }
+
+function setFocusSchedule({ enabled, rules } = {}) {
+  const clean = normalizeRules(rules);
+  if (!clean) return { ok: false, error: 'Each time range needs at least one day and different start and end times.' };
+  settings.set('focusRules', clean);
+  settings.set('focusEnabled', Boolean(enabled));
+  settings.set('focusOverrideUntil', 0);
+  dnd.changed(true);
+  return { ok: true };
+}
+
+function openSettings(section) {
+  if (lock.locked) return;
+  settingsWin.open(mainWindow, section);
+}
+
+function settingsState() {
+  const end = dnd.focusUntil();
+  return {
+    accounts: settings.get('accounts').map((a) => ({ ...a, active: a.id === activeId, unread: accounts.has(a.id) ? accounts.get(a.id).unread : 0 })),
+    maxAccounts: MAX_ACCOUNTS,
+    maxRules: MAX_RULES,
+    focus: {
+      enabled: settings.get('focusEnabled'),
+      rules: settings.get('focusRules'),
+      status: dnd.focusPaused() ? `Focus time now, until ${new Date(end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.` : '',
+    },
+  };
+}
+
+// ---------------------------------------------------------------- updates
 
 function showUpdate(release) {
   const cmd = updateCommand();
@@ -440,12 +532,20 @@ function onUpdateAvailable(release) {
 // ---------------------------------------------------------------- menus
 
 function pauseItems() {
-  const paused = dnd.isPaused();
+  const label = dnd.label();
   return [
-    ...(paused ? [{ label: dnd.label(), enabled: false }, { label: 'Resume notifications', click: () => dnd.resume() }, { type: 'separator' }] : []),
+    ...(label ? [{ label, enabled: false }, { label: 'Resume notifications', click: () => dnd.resume() }, { type: 'separator' }] : []),
     { label: 'Pause for 1 hour', click: () => dnd.pauseFor(HOUR) },
     { label: 'Pause until tomorrow morning', click: () => dnd.pauseUntilMorning() },
     { label: 'Pause until I resume', click: () => dnd.pauseIndefinitely() },
+    { type: 'separator' },
+    {
+      label: 'Use focus schedule',
+      type: 'checkbox',
+      checked: settings.get('focusEnabled'),
+      click: (item) => { settings.set('focusEnabled', item.checked); settings.set('focusOverrideUntil', 0); dnd.changed(true); },
+    },
+    { label: 'Edit focus schedule…', enabled: !lock.locked, click: () => { showWindow(); openSettings('focus'); } },
   ];
 }
 
@@ -463,7 +563,7 @@ function settingToggle(label, key, onChange) {
 }
 
 function lockItems() {
-  const locked = lock.locked;
+  const { locked } = lock;
   if (!lock.enabled) return [{ label: 'Turn on app lock…', enabled: !locked, click: () => { showWindow(); lock.startSetup(); } }];
   return [
     { label: 'Lock now', accelerator: 'CmdOrCtrl+Shift+L', enabled: !locked, click: () => lock.lock() },
@@ -482,8 +582,29 @@ function lockItems() {
   ];
 }
 
+function accountSwitchItems({ withShortcuts }) {
+  return settings.get('accounts').map((a, i) => {
+    const acc = accounts.get(a.id);
+    const unread = acc && acc.unread ? ` (${acc.unread})` : '';
+    return {
+      label: `${a.name}${unread}`,
+      type: 'radio',
+      checked: a.id === activeId,
+      enabled: !lock.locked,
+      ...(withShortcuts && i < 9 ? { accelerator: `CmdOrCtrl+${i + 1}` } : {}),
+      click: () => { switchAccount(a.id); showWindow(); },
+    };
+  });
+}
+
+function zoom(delta) {
+  const acc = active();
+  if (!acc) return;
+  acc.wc.setZoomLevel(delta === 0 ? 0 : acc.wc.getZoomLevel() + delta);
+}
+
 function buildAppMenu() {
-  const locked = lock.locked;
+  const { locked } = lock;
   const template = [
     ...(isMac ? [{
       label: app.name,
@@ -491,53 +612,71 @@ function buildAppMenu() {
         { role: 'about' },
         { label: 'Check for Updates…', click: () => checkForUpdatesNow() },
         { type: 'separator' },
+        { label: 'Settings…', accelerator: 'Cmd+,', enabled: !locked, click: () => openSettings() },
+        { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
         { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' },
         { type: 'separator' },
         { role: 'quit' },
       ],
-    }] : []),
-    ...(!isMac ? [{
+    }] : [{
       label: 'File',
-      submenu: [{ label: 'Check for Updates…', click: () => checkForUpdatesNow() }, { type: 'separator' }, { role: 'quit' }],
-    }] : []),
+      submenu: [
+        { label: 'Settings…', accelerator: 'Ctrl+,', enabled: !locked, click: () => openSettings() },
+        { label: 'Check for Updates…', click: () => checkForUpdatesNow() },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    }]),
     { role: 'editMenu' },
     {
       label: 'View',
       submenu: [
-        { label: 'Messages', accelerator: 'CmdOrCtrl+Shift+M', enabled: !locked, click: () => mainWindow && mainWindow.loadURL(HOME_URL) },
-        { role: 'reload' },
+        { label: 'Messages', accelerator: 'CmdOrCtrl+Shift+M', enabled: !locked, click: () => active() && active().wc.loadURL(HOME_URL) },
+        { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => active() && active().wc.reload() },
         { type: 'separator' },
-        { label: 'Open current page in browser', enabled: !locked, click: () => mainWindow && openExternal(mainWindow.webContents.getURL()) },
+        { label: 'Open current page in browser', enabled: !locked, click: () => active() && openExternal(active().wc.getURL()) },
         { type: 'separator' },
-        { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' },
-        { role: 'togglefullscreen' },
+        { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: () => zoom(0) },
+        { label: 'Zoom In', accelerator: 'CmdOrCtrl+=', click: () => zoom(0.5) },
+        { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: () => zoom(-0.5) },
+        { type: 'separator' },
+        { label: 'Toggle Full Screen', accelerator: isMac ? 'Ctrl+Cmd+F' : 'F11', click: () => mainWindow && mainWindow.setFullScreen(!mainWindow.isFullScreen()) },
         // DevTools would expose the page behind the lock screen.
-        { role: 'toggleDevTools', enabled: !locked },
+        { label: 'Toggle Developer Tools', accelerator: isMac ? 'Alt+Cmd+I' : 'Ctrl+Shift+I', enabled: !locked, click: () => active() && active().wc.toggleDevTools() },
+      ],
+    },
+    {
+      label: 'Accounts',
+      submenu: [
+        ...accountSwitchItems({ withShortcuts: true }),
+        { type: 'separator' },
+        { label: 'Add account', enabled: !locked && accounts.size < MAX_ACCOUNTS, click: () => addAccount() },
+        { label: 'Manage accounts…', enabled: !locked, click: () => openSettings('accounts') },
+        { type: 'separator' },
+        { label: accounts.size > 1 && active() ? `Log out of "${active().name}"…` : 'Log out and clear data…', enabled: !locked, click: () => logOutActive() },
       ],
     },
     { label: 'Notifications', submenu: pauseItems() },
     {
       label: 'Settings',
       submenu: [
-        settingToggle('Keep running in background when closed', 'runInBackground', (on) => { settings.set('runInBackground', on); rebuildMenus(); }),
+        settingToggle('Keep running in background when closed', 'runInBackground'),
         ...(process.platform !== 'linux' ? [settingToggle('Open at login', 'openAtLogin', setOpenAtLogin)] : []),
         settingToggle(`Global shortcut (${SHORTCUT_LABEL}) to show or hide`, 'globalShortcut', (on) => { settings.set('globalShortcut', on); applyGlobalShortcut(); rebuildMenus(); }),
         { type: 'separator' },
-        settingToggle('Hide Facebook top bar', 'hideTopBar', (on) => { settings.set('hideTopBar', on); applyPageCss(); rebuildMenus(); }),
-        settingToggle('Reopen last conversation', 'restoreLastChat', (on) => { settings.set('restoreLastChat', on); if (!on) settings.set('lastChat', ''); rebuildMenus(); }),
+        settingToggle('Hide Facebook top bar', 'hideTopBar', (on) => { settings.set('hideTopBar', on); applyCssAll(); rebuildMenus(); }),
+        settingToggle('Reopen last conversation', 'restoreLastChat', (on) => { settings.set('restoreLastChat', on); if (!on) settings.set('lastChats', {}); rebuildMenus(); }),
         { type: 'separator' },
-        settingToggle('Privacy screen: blur when inactive', 'privacyScreen', (on) => { settings.set('privacyScreen', on); applyPageCss(); rebuildMenus(); }),
+        settingToggle('Privacy screen: blur when inactive', 'privacyScreen', (on) => { settings.set('privacyScreen', on); applyCssAll(); rebuildMenus(); }),
         settingToggle('Private mode: keep nothing after quitting', 'ephemeral', (on) => setEphemeral(on)),
         { label: 'App lock', submenu: lockItems() },
         { type: 'separator' },
         settingToggle('Check for updates automatically', 'checkForUpdates', (on) => { settings.set('checkForUpdates', on); if (on) updater.autoCheck(); rebuildMenus(); }),
+        { type: 'separator' },
+        { label: 'More settings…', enabled: !locked, click: () => openSettings() },
       ],
-    },
-    {
-      label: 'Account',
-      submenu: [{ label: 'Log out and clear data…', click: () => logOutAndClearData() }],
     },
     { role: 'windowMenu' },
   ];
@@ -545,9 +684,13 @@ function buildAppMenu() {
 }
 
 function trayMenu() {
+  if (!lock || !dnd) return [{ label: 'Open Messenger Lite', click: () => showWindow() }];
+  const total = totalUnread();
   return [
     { label: 'Open Messenger Lite', click: () => showWindow() },
-    ...(unread > 0 ? [{ label: `${unread} unread`, enabled: false }] : []),
+    ...(accounts.size > 1
+      ? [{ type: 'separator' }, ...accountSwitchItems({ withShortcuts: false })]
+      : total > 0 ? [{ label: `${total} unread`, enabled: false }] : []),
     { type: 'separator' },
     { label: 'Notifications', submenu: pauseItems() },
     ...(lock.enabled ? [{ label: 'Lock now', enabled: !lock.locked, click: () => lock.lock() }] : []),
@@ -558,8 +701,9 @@ function trayMenu() {
 }
 
 function rebuildMenus() {
+  if (!lock || !dnd) return;
   buildAppMenu();
-  if (tray) tray.setUnread(unread, { paused: dnd.isPaused() });
+  if (tray) tray.setUnread(totalUnread(), { paused: dnd.isPaused() });
 }
 
 // ---------------------------------------------------------------- startup
@@ -586,6 +730,55 @@ function startedHidden() {
   return isMac && app.getLoginItemSettings().wasOpenedAtLogin === true;
 }
 
+let saveBoundsTimer = null;
+function saveBounds() {
+  if (!mainWindow || mainWindow.isMaximized() || mainWindow.isFullScreen() || mainWindow.isMinimized()) return;
+  clearTimeout(saveBoundsTimer);
+  saveBoundsTimer = setTimeout(() => {
+    if (mainWindow) settings.set('bounds', mainWindow.getNormalBounds());
+  }, 500);
+}
+
+function createWindow({ show }) {
+  mainWindow = new BaseWindow({
+    width: 1100,
+    height: 780,
+    ...(settings.get('bounds') || {}),
+    minWidth: 480,
+    minHeight: 400,
+    show,
+    title: 'Messenger Lite',
+    backgroundColor: '#111214',
+    autoHideMenuBar: true,
+  });
+  mainWindow.on('resize', () => { layout(); saveBounds(); });
+  mainWindow.on('move', saveBounds);
+  mainWindow.on('focus', () => { applyCssAll(); focusActive(); });
+  mainWindow.on('blur', () => applyCssAll());
+
+  // Run in background: closing the window hides it; quit from the tray or menu.
+  mainWindow.on('close', (e) => {
+    if (isQuitting) return;
+    if (!settings.get('runInBackground')) { isQuitting = true; app.quit(); return; }
+    e.preventDefault();
+    mainWindow.hide();
+    if (isWin && !settings.get('trayHintShown')) {
+      tray.displayBalloon('Messenger Lite is still running', 'It keeps notifying you about new messages. Quit from the tray icon.');
+      settings.set('trayHintShown', true);
+    }
+  });
+  mainWindow.on('closed', () => { mainWindow = null; });
+
+  overlay = new Overlay(mainWindow, {
+    unlock: (pw) => lock.tryPassword(pw),
+    touchId: () => lock.tryTouchId(),
+    setPassword: (pw) => lock.finishSetup(pw),
+    cancel: () => lock.cancelSetup(),
+    retry: () => active() && active().recovery.retryNow(),
+    reset: () => resetEverything(),
+  }, () => { if (active()) active().wc.focus(); });
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
@@ -600,16 +793,33 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     if (isWin) app.setAppUserModelId(APP_ID);
     settings = new Settings(app.getPath('userData'));
-    partition = settings.get('ephemeral') ? 'messenger-private' : 'persist:messenger';
+    ephemeral = settings.get('ephemeral');
     ensureWindowsShortcut();
-    configureSession();
 
-    dnd = new Dnd({ settings, onChange: () => rebuildMenus() });
-    lock = new AppLock({ settings, overlay: null, onChange: () => rebuildMenus() });
+    dnd = new Dnd({ settings, onChange: () => { rebuildMenus(); if (settingsWin) settingsWin.push(); } });
     updater = new Updater({ settings, onAvailable: onUpdateAvailable });
     tray = new AppTray({ toggleWindow, buildMenu: trayMenu });
+    settingsWin = new SettingsWindow({
+      getState: settingsState,
+      handlers: { addAccount, renameAccount, removeAccount, setFocus: setFocusSchedule },
+    });
 
     createWindow({ show: !startedHidden() });
+    lock = new AppLock({
+      settings,
+      overlay,
+      onChange: () => {
+        applyVisibility();
+        if (lock.locked && settingsWin) settingsWin.close();
+        if (!lock.locked) focusActive();
+        rebuildMenus();
+      },
+    });
+
+    activeId = settings.get('activeAccount');
+    for (const a of settings.get('accounts')) addAccountView(a);
+    switchAccount(activeId);
+    if (lock.enabled) lock.lock();
     rebuildMenus();
     applyGlobalShortcut();
 
@@ -621,7 +831,5 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('before-quit', () => { isQuitting = true; });
   app.on('will-quit', () => globalShortcut.unregisterAll());
-  app.on('window-all-closed', () => {
-    if (!isMac) app.quit();
-  });
+  app.on('window-all-closed', () => app.quit());
 }

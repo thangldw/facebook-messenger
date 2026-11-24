@@ -1,6 +1,6 @@
 'use strict';
 
-const { BrowserWindow, desktopCapturer, dialog } = require('electron');
+const { BaseWindow, desktopCapturer, dialog } = require('electron');
 const { isFacebookUrl } = require('./routes');
 
 const MAX_SOURCES = 12;
@@ -29,7 +29,7 @@ async function handleDisplayMediaRequest(request, callback) {
       cancelId: sources.length,
       noLink: false,
     };
-    const parent = BrowserWindow.getFocusedWindow();
+    const parent = BaseWindow.getFocusedWindow();
     const { response } = parent
       ? await dialog.showMessageBox(parent, options)
       : await dialog.showMessageBox(options);
