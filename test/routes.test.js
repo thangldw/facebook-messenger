@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { classify, isFacebookUrl, downloadTarget } = require('../src/routes');
+const { classify, isFacebookUrl, isCallUrl, downloadTarget } = require('../src/routes');
 
 const cases = {
   allowed: [
@@ -87,4 +87,21 @@ const downloads = [
 ];
 for (const [url, want] of downloads) {
   test(`downloadTarget(${JSON.stringify(url)})`, () => assert.strictEqual(downloadTarget(url), want));
+}
+
+const calls = [
+  ['https://www.facebook.com/groupcall/ROOM:123/?call_id=1', true],
+  ['https://www.facebook.com/videocall/incall/?peer_id=1', true],
+  ['https://www.facebook.com/messenger_call/', true],
+  ['https://www.facebook.com/rtc/x', true],
+  // Chats, other Facebook pages and look-alikes are not call pages.
+  ['https://www.facebook.com/messages/t/123', false],
+  ['https://www.facebook.com/groupcalls', false],
+  ['https://apps.facebook.com/groupcall/', false],
+  ['http://www.facebook.com/groupcall/', false],
+  ['https://www.facebook.com.evil.example/groupcall/', false],
+  ['about:blank', false],
+];
+for (const [url, want] of calls) {
+  test(`isCallUrl(${url})`, () => assert.strictEqual(isCallUrl(url), want));
 }

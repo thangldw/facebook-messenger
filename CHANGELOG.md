@@ -8,6 +8,8 @@
 - App lock: wrong-password slowdown now survives quitting and relaunching. New passwords need at least 6 characters (an existing shorter password keeps working). PRIVACY.md now says plainly that someone who can edit your files can turn the lock off.
 - Packaged builds refuse to start with Chromium switches that would let another program intercept the Facebook session: `--proxy-server`, `--proxy-pac-url`, `--host-resolver-rules`, `--host-rules`, `--ignore-certificate-errors`, `--ignore-certificate-errors-spki-list` and `--disable-web-security` (as well as the remote-debugging switches already refused). If you need a proxy, set it in your system's proxy settings, which Thrum uses.
 - Release workflow: the winget submission job downloads a pinned `wingetcreate.exe` and checks its SHA-256.
+- Microphone and camera are granted without asking only to call windows. Anywhere else (for example recording a voice clip in a chat) Thrum asks first, and can remember the answer until it quits.
+- macOS: the app now runs with the hardened runtime (entitlements: JIT, microphone, camera), so other programs cannot inject code into it through `DYLD_*` variables or a debugger. macOS may ask once more for the Keychain ("Thrum Safe Storage") and for microphone/camera access after updating.
 
 ## 0.4.0
 

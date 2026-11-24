@@ -62,7 +62,9 @@
       ],
       "category": "public.app-category.social-networking",
       "identity": "-",
-      "hardenedRuntime": false,
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
       "artifactName": "Thrum-${version}-mac-${arch}.${ext}",
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Messenger calls need the microphone.",

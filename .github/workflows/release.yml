@@ -57,6 +57,10 @@ jobs:
           node-version: 22
       - run: npm ci
       - run: npm test
+        env:
+          # As in ci.yml: the tests never start Electron, and without this each test file
+          # that loads it downloads the binary lazily; the parallel downloads race on Windows.
+          ELECTRON_OVERRIDE_DIST_PATH: ${{ runner.temp }}
       - name: Build
         shell: bash
         run: ${{ matrix.build }}
@@ -72,6 +76,32 @@ jobs:
           npx --no-install @electron/fuses read --app "$app" | tee fuses.txt
           grep -q "EnableCookieEncryption is Enabled" fuses.txt
           grep -q "RunAsNode is Disabled" fuses.txt
+          # Hardened runtime on, with only the entitlements in build/entitlements.mac.plist.
+          codesign -dv "$app" 2>&1 | tee codesign.txt
+          grep -Eq "flags=.*runtime" codesign.txt
+          codesign -d --entitlements :- "$app" > entitlements.xml
+          cat entitlements.xml
+          for e in cs.allow-jit cs.disable-library-validation device.audio-input device.camera; do
+            grep -q "com.apple.security.$e" entitlements.xml || { echo "::error::missing entitlement $e"; exit 1; }
+          done
+          if grep -Eq "allow-dyld-environment-variables|get-task-allow" entitlements.xml; then
+            echo "::error::unexpected entitlement"; exit 1
+          fi
+
+      - name: Smoke-test launching the macOS app (hardened runtime)
+        if: runner.os == 'macOS'
+        run: |
+          # A code-signing or entitlement problem kills the app or its renderer at startup.
+          app="$RUNNER_TEMP/apps/Thrum.app"
+          "$app/Contents/MacOS/Thrum" > launch.log 2>&1 &
+          pid=$!
+          sleep 25
+          ok=1
+          kill -0 "$pid" 2>/dev/null || { echo "::error::Thrum exited at startup"; ok=0; }
+          pgrep -f "Thrum Helper \(Renderer\)" >/dev/null || { echo "::error::no renderer process running"; ok=0; }
+          kill "$pid" 2>/dev/null || true
+          cat launch.log
+          [ "$ok" = 1 ]
 
       - name: Smoke-test install.ps1 with the built zip (Windows PowerShell 5.1)
         if: runner.os == 'Windows'

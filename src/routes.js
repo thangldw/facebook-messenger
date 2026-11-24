@@ -22,6 +22,9 @@ const ALLOWED_PREFIXES = [
   '/messenger_media', '/photo',
 ];
 
+// Call pages: the only place microphone and camera are granted without asking.
+const CALL_PREFIXES = ['/groupcall', '/videocall', '/messenger_call', '/rtc'];
+
 const FEED_PATHS = new Set(['/', '/home.php', '/index.php']);
 const FEED_PREFIXES = [
   '/watch', '/reel', '/reels', '/marketplace', '/gaming', '/stories', '/feeds',
@@ -47,6 +50,15 @@ function classify(rawUrl) {
   if (ALLOWED_PREFIXES.some((pre) => hasPrefix(p, pre))) return 'allowed';
   if (FEED_PATHS.has(p) || FEED_PREFIXES.some((pre) => hasPrefix(p, pre))) return 'feed';
   return 'external'; // profiles, pages, posts, photos...
+}
+
+// True for a Facebook call page (the window a call opens in).
+function isCallUrl(rawUrl) {
+  let url;
+  try { url = new URL(rawUrl); } catch { return false; }
+  if (url.protocol !== 'https:' || !FB_HOSTS.has(url.hostname)) return false;
+  const p = url.pathname.replace(/\/+$/, '') || '/';
+  return CALL_PREFIXES.some((pre) => hasPrefix(p, pre));
 }
 
 // True for https origins operated by Facebook/Messenger. Used to gate
@@ -80,4 +92,4 @@ function downloadTarget(rawUrl) {
   return null;
 }
 
-module.exports = { classify, isFacebookUrl, downloadTarget, HOME_URL };
+module.exports = { classify, isFacebookUrl, isCallUrl, downloadTarget, HOME_URL };
