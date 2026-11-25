@@ -4,8 +4,6 @@ A quiet desktop app for Facebook Messenger on macOS, Windows and Linux. Chat wit
 
 Thrum runs Facebook's own web client (`facebook.com/messages`) in a dedicated window. There is no reverse-engineered protocol and no unofficial API: it behaves like Messenger in a browser tab, minus the rest of Facebook.
 
-<!-- Main window screenshot goes here once added: docs/screenshots/main-window.png (use a demo account; no real names or messages). -->
-
 | App lock | Settings: accounts and focus schedule |
 |---|---|
 | <img src="docs/screenshots/app-lock.png" alt="Thrum's lock screen with a password field, an Unlock button and Use Touch ID" width="440"> | <img src="docs/screenshots/settings.png" alt="Thrum's settings window with two accounts and a weekday and a weekend focus schedule" width="300"> |
