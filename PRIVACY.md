@@ -22,7 +22,7 @@ Everything lives in one folder on your computer and nowhere else:
 | Session cookie (keeps you signed in) | `Partitions/messenger/Cookies` | Yes, **encrypted** with a key in the macOS Keychain, Windows DPAPI or the Linux secret service. |
 | Facebook's cache, local storage, IndexedDB | `Partitions/messenger/…` | Yes, as in a browser. Written by Facebook's web page, not by the app. Can include recent messages Facebook caches for speed. |
 | Files you download | Where you choose (Downloads by default) | Only when you click download on an attachment or photo. Attachments are always saved as files, never opened inside the app. |
-| App settings | `settings.json` | Yes: your choices in the Settings menu, window size/position, the names you gave your accounts in the app, and your focus schedule. Also, unless you turn it off or use private mode, the **address of the last conversation** opened in each account (e.g. `/messages/t/1234`, no names or content), so it can reopen on launch. |
+| App settings | `settings.json` | Yes: your choices in the Settings menu, window size/position, the names you gave your accounts in the app, your focus schedule and the app lock's count of recent wrong guesses. Also, unless you turn it off or use private mode, the **address of the last conversation** opened in each account (e.g. `/messages/t/1234`, no names or content), so it can reopen on launch. |
 | Several accounts | `Partitions/messenger`, `Partitions/messenger-<id>` | Each account has its own, separate session folder. Accounts never share cookies or storage; removing an account deletes its folder's data. |
 | App lock password | `settings.json` | **Only a salted scrypt hash**, never the password itself. The hash cannot be turned back into the password; it can only check a guess, and the app slows down repeated wrong guesses. |
 | Private mode | — | With *Settings → Private mode* on, Facebook's session, cache and storage are kept in memory only and vanish when you quit. Turning it on also deletes what was stored before. |
@@ -36,7 +36,7 @@ Your login happens inside Facebook's web page. The app is deliberately built so 
 1. **No code runs inside the page.** The app never calls `executeJavaScript`, and Facebook's pages have no preload script and no IPC channel to the app. The only thing it injects is CSS (to hide Facebook's top bar and for the privacy-screen blur), and CSS cannot read form fields or send data. The lock and reconnect screens and the settings window are the app's own local pages; they are the only pages with an IPC channel, and each channel accepts requests from its own page alone and only for a fixed list of actions.
 2. **The page is isolated from the app.** It runs with `contextIsolation: true`, `sandbox: true` and `nodeIntegration: false`, so Facebook's page, or anything injected into it, cannot reach the app or your files either.
 3. **The app does not touch cookies or traffic.** It never reads the cookie store and does not inspect, intercept or proxy network requests.
-4. **The binary is hardened.** On macOS the app runs with the hardened runtime, so macOS ignores `DYLD_*` code-injection variables and refuses debugger attachment. Builds enable the Electron fuses that encrypt cookies at rest and disable `ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS` and `--inspect`, the usual ways to turn an Electron app into a tool for reading its data. The app only loads its own code from its integrity-checked `app.asar`.
+4. **The binary is hardened.** Builds enable the Electron fuses that encrypt cookies at rest and disable `ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS` and `--inspect`, the usual ways to turn an Electron app into a tool for reading its data, and the app only loads its own code from its integrity-checked `app.asar`. Installed builds also refuse to start with Chromium switches that would expose the page or let another program sit between the app and Facebook: remote debugging, `--proxy-server`, `--proxy-pac-url`, `--host-resolver-rules`, `--host-rules`, `--ignore-certificate-errors` and `--disable-web-security`. On macOS the app runs with the hardened runtime, so macOS ignores `DYLD_*` code-injection variables and refuses debugger attachment; library validation is off (`disable-library-validation`), which ad-hoc signed builds need to load Electron's own frameworks.
 5. **Minimal permissions, Facebook only.** Facebook's own pages may use notifications, microphone/camera (without asking only in a call window; anywhere else, such as recording a voice clip, the app asks you first), screen capture (screen sharing, after you pick a screen), clipboard write and fullscreen. Third-party content embedded in a page gets none of these, and everything else (location, USB, Bluetooth, …) is denied for everyone.
 6. **No fake login windows.** App windows have no address bar, so nothing but Facebook may ever render in one. Every window, including call windows and popups, refuses `data:`, `blob:` and `file:` pages and any non-Facebook site, whether reached by a link, a script, a popup or a server redirect, and a popup opened by a non-Facebook frame embedded in a page is closed before it is shown; those links open in your normal browser, where you can see the address. Only `http`/`https` links are handed to the browser, so a page cannot launch other programs on your computer.
 
@@ -51,10 +51,10 @@ The app is a handful of short files in [`src/`](src/) with no runtime dependenci
 Every release file is built by GitHub Actions from a tagged commit and comes with a signed [build provenance attestation](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations). With the [GitHub CLI](https://cli.github.com/):
 
 ```bash
-gh attestation verify Thrum-0.4.0-mac-arm64.zip --repo thangldw/thrum
+gh attestation verify Thrum-0.4.1-mac-arm64.zip --repo thangldw/thrum
 ```
 
-A successful check proves the file was produced by this repository's release workflow and has not been modified since. The install scripts and the in-app updater also check every download against the release's `SHA256SUMS.txt`.
+A successful check proves the file was produced by this repository's release workflow and has not been modified since. The install scripts and the in-app updater also check every download against the release's `SHA256SUMS.txt`. Both checks trust GitHub and this repository: releases are not signed with a separate key, so they could not detect a release published by someone who had taken over the maintainer's GitHub account.
 
 ### 2. No password or autofill store exists
 
@@ -83,6 +83,8 @@ Expect `plaintext` to be `0` (or empty). You can also confirm the fuses on the i
 ```bash
 npx @electron/fuses read --app "$HOME/Applications/Thrum.app"
 # EnableCookieEncryption is Enabled, RunAsNode is Disabled, ...
+codesign -dv "$HOME/Applications/Thrum.app" 2>&1 | grep flags
+# flags=0x10002(adhoc,runtime): "runtime" is the hardened runtime
 ```
 
 ### 4. The only network traffic is Facebook
@@ -112,8 +114,9 @@ For the same reason the lock does not stop someone who can run programs or edit 
 
 - **Facebook itself.** Your messages and account are processed by Meta exactly as when you use facebook.com.
 - **Someone with access to your user account on the computer.** Like any browser, a signed-in session on your computer can be used by anyone who can use your login. Cookie encryption protects the cookie file if it is copied off the machine or read by another user, not against malware running as you.
+- **A compromised release.** If the maintainer's GitHub account were taken over, a malicious release would pass the checksum and attestation checks above. This is the same trust you place in any project that ships its releases from GitHub.
 - **Facebook's cached data.** Facebook's web page may cache recent messages in its local storage. That data is not encrypted by the app; use full-disk encryption (FileVault, BitLocker), which you should have on anyway.
 
-## macOS Keychain prompt
+## macOS prompts after an update
 
-Cookie encryption stores its key in your Keychain as "Thrum Safe Storage". Because builds are not signed with a paid Apple certificate, macOS may ask "Thrum wants to use your confidential information…" after you install an update. Choose **Always Allow**. If you deny it, the app cannot read its cookies and you will be asked to sign in again.
+Cookie encryption stores its key in your Keychain as "Thrum Safe Storage". Because builds are not signed with a paid Apple certificate, every build has a new ad-hoc signature, so after an update macOS may ask "Thrum wants to use your confidential information…" again. Choose **Always Allow**. If you deny it, the app cannot read its cookies and you will be asked to sign in again. For the same reason macOS may ask again for microphone and camera access the next time you make a call.

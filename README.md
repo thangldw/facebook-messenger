@@ -4,13 +4,19 @@ A quiet desktop app for Facebook Messenger on macOS, Windows and Linux. Chat wit
 
 Thrum runs Facebook's own web client (`facebook.com/messages`) in a dedicated window. There is no reverse-engineered protocol and no unofficial API: it behaves like Messenger in a browser tab, minus the rest of Facebook.
 
+<!-- Main window screenshot goes here once added: docs/screenshots/main-window.png (use a demo account; no real names or messages). -->
+
+| App lock | Settings: accounts and focus schedule |
+|---|---|
+| <img src="docs/screenshots/app-lock.png" alt="Thrum's lock screen with a password field, an Unlock button and Use Touch ID" width="440"> | <img src="docs/screenshots/settings.png" alt="Thrum's settings window with two accounts and a weekday and a weekend focus schedule" width="300"> |
+
 > Thrum is an independent project, not affiliated with or endorsed by Meta. "Facebook" and "Messenger" are trademarks of Meta Platforms, Inc., used here only to describe what the app works with.
 
 ## Features
 
 **Messaging**
 - Messages only: the News Feed, Watch, Reels and Marketplace bounce back to your inbox; profiles, posts and links open in your browser.
-- Voice and video calls, with screen sharing (the native picker on macOS 15+, a source chooser elsewhere; system audio on Windows).
+- Voice and video calls, with screen sharing (the native picker on macOS 15+, a source chooser elsewhere; system audio on Windows). Calls get the microphone and camera; anything else that asks for them, such as recording a voice clip, needs your OK first.
 - Photos open in the app's viewer; attachments download to a folder you choose.
 - Several accounts, each with its own login, all running at once. Switch with `Cmd/Ctrl + 1…9`, the *Accounts* menu or the tray.
 - Reopens your last conversation on launch.
@@ -22,9 +28,10 @@ Thrum runs Facebook's own web client (`facebook.com/messages`) in a dedicated wi
 - Global shortcut to show or hide Thrum: `⌃⌥M` on macOS, `Ctrl+Alt+Shift+M` on Windows and Linux.
 
 **Privacy**
-- App lock with a password (and Touch ID on macOS): on launch, when the computer locks or sleeps, or after a period of inactivity.
+- App lock with a password (and Touch ID on macOS): on launch, when the computer locks or sleeps, or after a period of inactivity. It covers call windows too, and repeated wrong guesses are slowed down.
 - Privacy screen: blurs the window whenever it is not in front.
 - Private mode: nothing is written to disk; you are logged out when you quit.
+- Hardened build: Facebook's pages run sandboxed with no access to the app, nothing but Facebook ever renders in an app window, and the app refuses to start with debugging or traffic-interception switches. [PRIVACY.md](PRIVACY.md) has the details.
 
 **Maintenance-free**
 - Updates itself: *Check for Updates…*, then **Update now**. The download is checked against the release's SHA-256 checksums and swapped in on restart.
@@ -92,6 +99,8 @@ Use **Check for Updates…** (in the *Thrum* menu on macOS, the *File* menu else
 
 Homebrew installs update with `brew upgrade --cask thangldw/thrum/thrum`, and `.deb` installs with a newer `.deb`. Re-running the install command also works.
 
+On macOS, an update can bring back the Keychain prompt for "Thrum Safe Storage" (choose **Always Allow**) and the microphone/camera prompts, because each build has a new ad-hoc signature.
+
 ### Uninstall
 
 Quit Thrum, then delete:
@@ -107,7 +116,9 @@ Quit Thrum, then delete:
 - **Notifications do not name the account** when you have several, because Thrum does not read Facebook's pages. The tray and *Accounts* menu show unread counts per account.
 - On Windows and Linux, clicking a notification may not bring a hidden window to the front; use the tray icon or the global shortcut.
 - Spellcheck is macOS-only: on Windows and Linux, Electron would download dictionaries from Google.
-- After an update on macOS, the Keychain may ask again for "Thrum Safe Storage" (choose **Always Allow**), because builds are not signed with a paid certificate.
+- Builds are not signed with paid Apple or Microsoft certificates, so macOS asks again for the Keychain and microphone/camera after an update, and downloads from a browser need the steps under *Manual download*.
+- Thrum refuses to start with `--proxy-server` and similar command-line switches. To use a proxy, set it in your system's network settings, which Thrum follows.
+- The app lock is a privacy screen, not encryption: someone who can use your computer account can get past it (see [PRIVACY.md](PRIVACY.md#about-the-app-lock)).
 - If Meta changes its web client, hiding the top bar or a navigation rule may need an update.
 
 ## Contributing
