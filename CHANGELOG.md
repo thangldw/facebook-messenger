@@ -2,14 +2,16 @@
 
 ## 0.4.1
 
-- Security: the app lock now also hides call windows and other popups, and no new window opens while locked. Before, a call window stayed visible and usable above the lock.
-- Security: a popup opened by a non-Facebook frame embedded in a page (which could write a fake login page into a window with no address bar) is closed before it is shown.
-- Release builds no longer fetch `@electron/fuses` from npm while building the shipped files; it is pinned in `package-lock.json`.
-- App lock: wrong-password slowdown now survives quitting and relaunching. New passwords need at least 6 characters (an existing shorter password keeps working). PRIVACY.md now says plainly that someone who can edit your files can turn the lock off.
-- Packaged builds refuse to start with Chromium switches that would let another program intercept the Facebook session: `--proxy-server`, `--proxy-pac-url`, `--host-resolver-rules`, `--host-rules`, `--ignore-certificate-errors`, `--ignore-certificate-errors-spki-list` and `--disable-web-security` (as well as the remote-debugging switches already refused). If you need a proxy, set it in your system's proxy settings, which Thrum uses.
-- Release workflow: the winget submission job downloads a pinned `wingetcreate.exe` and checks its SHA-256.
-- Microphone and camera are granted without asking only to call windows. Anywhere else (for example recording a voice clip in a chat) Thrum asks first, and can remember the answer until it quits.
-- macOS: the app now runs with the hardened runtime (entitlements: JIT, microphone, camera), so other programs cannot inject code into it through `DYLD_*` variables or a debugger. macOS may ask once more for the Keychain ("Thrum Safe Storage") and for microphone/camera access after updating.
+Security hardening, from a review of the app and its release process.
+
+- **App lock** now also hides call windows and other popups, and no new window opens while locked. Before, a call window stayed visible and usable above the lock.
+- **App lock** wrong-password slowdown survives quitting and relaunching. New passwords need at least 6 characters; an existing shorter password keeps working.
+- **Microphone and camera** are granted without asking only to call windows. Anywhere else (for example recording a voice clip in a chat) Thrum asks first, and can remember the answer until it quits.
+- **Popups** opened by a non-Facebook frame embedded in a page are closed before they are shown, so they cannot display a fake login page in a window with no address bar.
+- **Command-line switches** that would let another program intercept the Facebook session are refused: `--proxy-server`, `--proxy-pac-url`, `--host-resolver-rules`, `--host-rules`, `--ignore-certificate-errors`, `--ignore-certificate-errors-spki-list` and `--disable-web-security`, as well as the remote-debugging switches already refused. If you need a proxy, set it in your system's proxy settings, which Thrum uses.
+- **macOS:** the app runs with the hardened runtime, so other programs cannot inject code into it through `DYLD_*` variables or a debugger. After updating, macOS may ask once more for the Keychain ("Thrum Safe Storage") and for microphone/camera access.
+- **Release process:** release builds no longer fetch `@electron/fuses` or `wingetcreate` unpinned at build time, launch the signed macOS app as a smoke test, and no longer fail at random on Windows while downloading Electron for the tests.
+- PRIVACY.md now says plainly that someone who can edit your files can turn the app lock off, and that releases are verified against GitHub, not a separate signing key.
 
 ## 0.4.0
 
